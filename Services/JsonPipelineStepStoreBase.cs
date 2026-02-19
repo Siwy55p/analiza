@@ -1,5 +1,5 @@
+﻿using STSAnaliza.Interfejs;
 using System.Text.Json;
-using STSAnaliza.Interfejs;
 
 namespace STSAnaliza.Services;
 

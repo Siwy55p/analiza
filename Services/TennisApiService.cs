@@ -1,8 +1,7 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using STSAnaliza.Models;
 using STSAnaliza.Services.SportradarDtos;
 using System.Collections.Concurrent;
-using System.Globalization;
 using System.Text;
 using System.Text.Json;
 

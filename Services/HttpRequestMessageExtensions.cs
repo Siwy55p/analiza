@@ -1,6 +1,4 @@
-using System.Net.Http.Headers;
-
-namespace STSAnaliza.Services;
+﻿namespace STSAnaliza.Services;
 
 internal static class HttpRequestMessageExtensions
 {

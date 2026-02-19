@@ -1,6 +1,4 @@
-using STSAnaliza.Interfejs;
-
-namespace STSAnaliza.Services;
+﻿namespace STSAnaliza.Services;
 
 /// <summary>
 /// Store kroków pipeline dla zakładki 1 (pojedynczy mecz).

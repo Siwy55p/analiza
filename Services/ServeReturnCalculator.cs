@@ -1,5 +1,5 @@
+﻿using STSAnaliza.Services.SportradarDtos;
 using System.Globalization;
-using STSAnaliza.Services.SportradarDtos;
 
 namespace STSAnaliza.Services;
 

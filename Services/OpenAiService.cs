@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using OpenAI.Responses;
 using STSAnaliza.Interfejs;
 using System.Text.Json;
@@ -10,7 +10,7 @@ namespace STSAnaliza.Services;
 public sealed class OpenAiService : IOpenAiService
 {
     private readonly ResponsesClient _responsesClient;
-    private readonly ILogger<OpenAiService> _logger; 
+    private readonly ILogger<OpenAiService> _logger;
 
     // rozmowa “stateful” po stronie Responses API
     private readonly SemaphoreSlim _chatGate = new(1, 1);

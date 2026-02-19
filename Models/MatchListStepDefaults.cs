@@ -1,6 +1,4 @@
-using System.Collections.Generic;
-
-namespace STSAnaliza
+﻿namespace STSAnaliza
 {
     public static class MatchListStepDefaults
     {
