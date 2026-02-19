@@ -68,14 +68,9 @@ public sealed partial class TennisApiService : ITennisApiService
             status.Equals("ended", StringComparison.OrdinalIgnoreCase));
 
     private static string NormalizeId(string? id)
-    {
-        if (string.IsNullOrWhiteSpace(id)) return "";
-        var s = id.Trim();
-        try { s = Uri.UnescapeDataString(s); } catch { /* ignore */ }
-        return s;
-    }
+    => SportradarId.NormalizeOptional(id);
 
-    // normalizacja: tylko hard/clay/grass/brak
+
     private static string NormalizeSurface(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw))

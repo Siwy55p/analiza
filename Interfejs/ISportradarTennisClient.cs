@@ -1,4 +1,4 @@
-using STSAnaliza.Services.SportradarDtos;
+﻿using STSAnaliza.Services.SportradarDtos;
 
 namespace STSAnaliza.Services;
 
@@ -16,9 +16,6 @@ public interface ISportradarTennisClient
     // Rankings (DTO)
     Task<RankingsResponseDto> GetRankingsAsync(CancellationToken ct);
     Task<RankingsResponseDto> GetRaceRankingsAsync(CancellationToken ct);
-
-    // Raw JSON (jeśli gdzieś jeszcze używasz)
-    Task<string> GetRaceRankingsJsonAsync(CancellationToken ct);
 
     Task<CompetitorSummariesResponse> GetCompetitorVersusSummariesAsync(
     string competitorIdA,

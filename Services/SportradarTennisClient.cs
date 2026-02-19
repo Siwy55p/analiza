@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Caching.Memory;
+﻿using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using STSAnaliza.Options;
@@ -57,7 +57,6 @@ public sealed class SportradarTennisClient : ISportradarTennisClient
             entry.AbsoluteExpirationRelativeToNow = ttl;
             entry.Priority = CacheItemPriority.Normal;
 
-            // jak loader rzuci wyjątek => nic się nie zapisze do cache (dobrze)
             var value = await loader(ct).ConfigureAwait(false);
 
             // jeśli null => cache krótko, żeby nie kisić "braków"
@@ -69,12 +68,12 @@ public sealed class SportradarTennisClient : ISportradarTennisClient
     }
 
     // -------------------------
-    // Public API
+    // Public API (ZGODNE z ISportradarTennisClient)
     // -------------------------
 
     public Task<string> GetSportEventSummaryJsonAsync(string sportEventId, CancellationToken ct)
     {
-        var id = NormalizeSrId(sportEventId, nameof(sportEventId));
+        var id = SportradarId.NormalizeRequired(sportEventId, nameof(sportEventId));
         var path = $"sport_events/{id}/summary.json";
 
         var cacheKey = $"{CachePrefix}:event-summary-json:{id}";
@@ -135,13 +134,8 @@ public sealed class SportradarTennisClient : ISportradarTennisClient
         string competitorIdB,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(competitorIdA))
-            throw new ArgumentException("competitorIdA nie może być pusty.", nameof(competitorIdA));
-        if (string.IsNullOrWhiteSpace(competitorIdB))
-            throw new ArgumentException("competitorIdB nie może być pusty.", nameof(competitorIdB));
-
-        var a = NormalizeSrId(competitorIdA, nameof(competitorIdA));
-        var b = NormalizeSrId(competitorIdB, nameof(competitorIdB));
+        var a = SportradarId.NormalizeRequired(competitorIdA, nameof(competitorIdA));
+        var b = SportradarId.NormalizeRequired(competitorIdB, nameof(competitorIdB));
 
         var path = $"competitors/{a}/versus/{b}/summaries.json";
 
@@ -159,7 +153,7 @@ public sealed class SportradarTennisClient : ISportradarTennisClient
 
     public Task<SportEventSummaryDto> GetSportEventSummaryAsync(string sportEventId, CancellationToken ct)
     {
-        var id = NormalizeSrId(sportEventId, nameof(sportEventId));
+        var id = SportradarId.NormalizeRequired(sportEventId, nameof(sportEventId));
         var path = $"sport_events/{id}/summary.json";
 
         var cacheKey = $"{CachePrefix}:event-summary:{id}";
@@ -173,10 +167,7 @@ public sealed class SportradarTennisClient : ISportradarTennisClient
 
     public Task<CompetitorSummariesResponse> GetCompetitorSummariesAsync(string competitorId, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(competitorId))
-            throw new ArgumentException("competitorId nie może być pusty.", nameof(competitorId));
-
-        var id = NormalizeSrId(competitorId, nameof(competitorId));
+        var id = SportradarId.NormalizeRequired(competitorId, nameof(competitorId));
         var path = $"competitors/{id}/summaries.json";
 
         var cacheKey = $"{CachePrefix}:competitor-summaries:{id}";
@@ -218,7 +209,7 @@ public sealed class SportradarTennisClient : ISportradarTennisClient
 
     public Task<SeasonInfoDto> GetSeasonInfoAsync(string seasonId, CancellationToken ct)
     {
-        var id = NormalizeSrId(seasonId, nameof(seasonId));
+        var id = SportradarId.NormalizeRequired(seasonId, nameof(seasonId));
         var path = $"seasons/{id}/info.json";
 
         var cacheKey = $"{CachePrefix}:season-info:{id}";
@@ -233,14 +224,6 @@ public sealed class SportradarTennisClient : ISportradarTennisClient
     // -------------------------
     // Private helpers
     // -------------------------
-
-    private static string NormalizeSrId(string id, string paramName)
-    {
-        if (string.IsNullOrWhiteSpace(id))
-            throw new ArgumentException($"{paramName} nie może być pusty.", paramName);
-
-        return Uri.UnescapeDataString(id.Trim());
-    }
 
     private string BuildUrl(string relativePath)
     {
@@ -262,23 +245,9 @@ public sealed class SportradarTennisClient : ISportradarTennisClient
 
         var url = BuildUrl(relativePath);
 
-
-        // 2) send
+        // ✅ NIE robimy retry 429 tutaj — to robi SportradarThrottlingHandler
         using var req = CreateGetRequest(url);
         using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
-
-        // 3) 429 retry once (jeśli handler już retry'uje, to tu będzie rzadziej)
-        if (resp.StatusCode == HttpStatusCode.TooManyRequests)
-        {
-            var retryAfter = resp.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(2);
-            _logger.LogWarning("Sportradar 429 Too Many Requests. Retry after: {Delay}. Url: {Url}", retryAfter, url);
-
-            await Task.Delay(retryAfter, ct);
-
-            using var req2 = CreateGetRequest(url);
-            using var resp2 = await _http.SendAsync(req2, HttpCompletionOption.ResponseHeadersRead, ct);
-            return await ReadJsonOrThrowAsync(resp2, url, ct, emptyFactory);
-        }
 
         return await ReadJsonOrThrowAsync(resp, url, ct, emptyFactory);
     }
@@ -289,23 +258,9 @@ public sealed class SportradarTennisClient : ISportradarTennisClient
 
         var url = BuildUrl(relativePath);
 
-        //await _gate.WaitTurnAsync(ct);
-
+        // ✅ NIE robimy retry 429 tutaj — to robi SportradarThrottlingHandler
         using var req = CreateGetRequest(url);
         using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
-
-        if (resp.StatusCode == HttpStatusCode.TooManyRequests)
-        {
-            var retryAfter = resp.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(2);
-            _logger.LogWarning("Sportradar 429 Too Many Requests. Retry after: {Delay}. Url: {Url}", retryAfter, url);
-
-            await Task.Delay(retryAfter, ct);
-            //await _gate.WaitTurnAsync(ct);
-
-            using var req2 = CreateGetRequest(url);
-            using var resp2 = await _http.SendAsync(req2, HttpCompletionOption.ResponseHeadersRead, ct);
-            return await ReadStringOrThrowAsync(resp2, url, ct);
-        }
 
         return await ReadStringOrThrowAsync(resp, url, ct);
     }
@@ -323,6 +278,9 @@ public sealed class SportradarTennisClient : ISportradarTennisClient
         if (!resp.IsSuccessStatusCode)
         {
             var body = await resp.Content.ReadAsStringAsync(ct);
+            _logger.LogWarning("Sportradar HTTP {Status} {Reason}. Url: {Url}. Body: {Body}",
+                (int)resp.StatusCode, resp.ReasonPhrase, url, body);
+
             throw new InvalidOperationException(
                 $"Sportradar HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}. Url: {url}. Body: {body}"
             );

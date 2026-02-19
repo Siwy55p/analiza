@@ -1,10 +1,8 @@
-
+﻿
 using Microsoft.Extensions.DependencyInjection;
 using STSAnaliza.Interfejs;
 using STSAnaliza.Services;
 using System.Globalization;
-using System.Reflection.Metadata;
-using System.Text.RegularExpressions;
 using System.Threading.Channels;
 
 namespace STSAnaliza
