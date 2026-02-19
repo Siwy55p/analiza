@@ -1,4 +1,4 @@
-﻿namespace STSAnaliza
+namespace STSAnaliza
 {
     public class MatchListItem
     {

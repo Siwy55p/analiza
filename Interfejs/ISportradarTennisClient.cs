@@ -1,4 +1,4 @@
-﻿using STSAnaliza.Services.SportradarDtos;
+using STSAnaliza.Services.SportradarDtos;
 
 namespace STSAnaliza.Services;
 

@@ -1,4 +1,4 @@
-﻿// <summary>
+// <summary>
 /// Konfiguracja pojedynczego kroku wykonywanego w pipeline.
 /// </summary>
 public class StepDefinition

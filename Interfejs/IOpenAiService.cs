@@ -1,4 +1,4 @@
-﻿namespace STSAnaliza.Interfejs;
+namespace STSAnaliza.Interfejs;
 
 public interface IOpenAiService
 {

@@ -1,4 +1,4 @@
-﻿using STSAnaliza.Models;
+using STSAnaliza.Models;
 
 namespace STSAnaliza.Services;
 

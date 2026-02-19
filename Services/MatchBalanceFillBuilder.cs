@@ -1,4 +1,4 @@
-﻿using STSAnaliza.Models;
+using STSAnaliza.Models;
 using System.Collections.Concurrent;
 
 namespace STSAnaliza.Services;

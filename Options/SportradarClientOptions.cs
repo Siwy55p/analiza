@@ -1,4 +1,4 @@
-﻿namespace STSAnaliza.Services;
+namespace STSAnaliza.Services;
 
 public sealed class SportradarClientOptions
 {

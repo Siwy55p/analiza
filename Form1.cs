@@ -92,7 +92,7 @@ namespace STSAnaliza
 
                 instance.FormClosed += (_, __) =>
                 {
-                    // Nie wywo≥uj Dispose() tutaj ñ Form juø siÍ zamyka i sam zwalnia zasoby.
+                    // Nie wywo≈Çuj Dispose() tutaj ‚Äì Form ju≈º siƒô zamyka i sam zwalnia zasoby.
                     onClosed();
                 };
             }
@@ -129,7 +129,7 @@ namespace STSAnaliza
                 () =>
                 {
                     var f = new OptionsForm(_listStepStore);
-                    f.Text = "Opcje ñ analiza listy meczÛw (Tab2)";
+                    f.Text = "Opcje ‚Äì analiza listy mecz√≥w (Tab2)";
                     return f;
                 },
                 onClosed: () => _optionsListStepsForm = null
@@ -140,14 +140,14 @@ namespace STSAnaliza
         {
             if (_openAiService is null)
             {
-                MessageBox.Show("OpenAI service nie jest zainicjalizowany.", "B≥πd",
+                MessageBox.Show("OpenAI service nie jest zainicjalizowany.", "B≈ÇƒÖd",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
             if (_listMatches == null || _listMatches.Count == 0)
             {
-                MessageBox.Show("Najpierw pobierz listÍ meczÛw.", "Info",
+                MessageBox.Show("Najpierw pobierz listƒô mecz√≥w.", "Info",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -161,7 +161,7 @@ namespace STSAnaliza
             var ct = _listAnalyzeCts.Token;
 
             AppendLineSafe(txtListOutput, "");
-            AppendLineSafe(txtListOutput, $"--- START ANALIZY: {_listMatches.Count} meczÛw ---");
+            AppendLineSafe(txtListOutput, $"--- START ANALIZY: {_listMatches.Count} mecz√≥w ---");
 
             try
             {
@@ -196,7 +196,7 @@ namespace STSAnaliza
                         }
                         else
                         {
-                            AppendLineSafe(txtListOutput, $"  [WARN] Nie umiem sparsowaÊ daty: '{m.Day}' -> lecÍ fallback po nazwie.");
+                            AppendLineSafe(txtListOutput, $"  [WARN] Nie umiem sparsowaƒá daty: '{m.Day}' -> lecƒô fallback po nazwie.");
                         }
 
                         var jsonA = aId is not null
@@ -225,22 +225,22 @@ namespace STSAnaliza
                         }
                         catch (Exception ex)
                         {
-                            AppendLineSafe(txtListOutput, $"  [WARN] META niedostÍpne: {ex.Message}");
+                            AppendLineSafe(txtListOutput, $"  [WARN] META niedostƒôpne: {ex.Message}");
                         }
 
 
                         var fill11_2 = (aId is not null)
                             ? await _balanceBuilder.BuildByCompetitorIdAsync(m.PlayerA, aId, perMatchCts.Token)
-                            : "12M: brak danych\n10W: brak danych\nJakoúÊ bilansu: brak danych";
+                            : "12M: brak danych\n10W: brak danych\nJako≈õƒá bilansu: brak danych";
 
                         var fill12_2 = (bId is not null)
                             ? await _balanceBuilder.BuildByCompetitorIdAsync(m.PlayerB, bId, perMatchCts.Token)
-                            : "12M: brak danych\n10W: brak danych\nJakoúÊ bilansu: brak danych";
+                            : "12M: brak danych\n10W: brak danych\nJako≈õƒá bilansu: brak danych";
 
                         string fill_6;
                         try
                         {
-                            // osobny krÛtszy timeout na rankingi (øeby nigdy nie wisia≥o 60 min)
+                            // osobny kr√≥tszy timeout na rankingi (≈ºeby nigdy nie wisia≈Ço 60 min)
                             using var rankCts = CancellationTokenSource.CreateLinkedTokenSource(perMatchCts.Token);
                             rankCts.CancelAfter(TimeSpan.FromSeconds(20));
 
@@ -254,7 +254,7 @@ namespace STSAnaliza
                         }
                         catch (Exception ex)
                         {
-                            AppendLineSafe(txtListOutput, $"  [WARN] Rankingi niedostÍpne: {ex.Message}");
+                            AppendLineSafe(txtListOutput, $"  [WARN] Rankingi niedostƒôpne: {ex.Message}");
                             fill_6 = "Brak danych";
                         }
 
@@ -270,7 +270,7 @@ namespace STSAnaliza
                         }
                         catch (Exception ex)
                         {
-                            AppendLineSafe(txtListOutput, $"  [WARN] H2H niedostÍpne: {ex.Message}");
+                            AppendLineSafe(txtListOutput, $"  [WARN] H2H niedostƒôpne: {ex.Message}");
                             fill_13 = "H2H (12M): brak danych";
                         }
 
@@ -281,7 +281,7 @@ namespace STSAnaliza
                         try
                         {
                             using var srCts = CancellationTokenSource.CreateLinkedTokenSource(perMatchCts.Token);
-                            srCts.CancelAfter(TimeSpan.FromSeconds(120)); // last52w = kilka/kilkanaúcie requestÛw
+                            srCts.CancelAfter(TimeSpan.FromSeconds(120)); // last52w = kilka/kilkana≈õcie request√≥w
 
                             AppendLineSafe(txtListOutput, "  [AUTO] Serwis/Return B (last 52 weeks overall)...");
                             (fill12_3, fill12_4) = await _tennisApi.BuildFill12_3_12_4_ServeReturn_Last52WeeksOverallAsync(
@@ -292,7 +292,7 @@ namespace STSAnaliza
                         }
                         catch (Exception ex)
                         {
-                            AppendLineSafe(txtListOutput, $"  [WARN] Serwis/Return B niedostÍpne: {ex.Message}");
+                            AppendLineSafe(txtListOutput, $"  [WARN] Serwis/Return B niedostƒôpne: {ex.Message}");
                         }
 
                         string fill11_3 = "hold%: brak\n1st won%: brak\n2nd serve points won%: brak";
@@ -312,7 +312,7 @@ namespace STSAnaliza
                         }
                         catch (Exception ex)
                         {
-                            AppendLineSafe(txtListOutput, $"  [WARN] Serwis/Return A niedostÍpne: {ex.Message}");
+                            AppendLineSafe(txtListOutput, $"  [WARN] Serwis/Return A niedostƒôpne: {ex.Message}");
                         }
 
                         var prefilled = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -373,10 +373,10 @@ namespace STSAnaliza
                     }
                     catch (Exception ex)
                     {
-                        AppendLineSafe(txtListOutput, $"  [B£•D] {ex.Message}");
+                        AppendLineSafe(txtListOutput, $"  [B≈ÅƒÑD] {ex.Message}");
                     }
 
-                    // ma≥a pauza zmniejsza ryzyko rate-limitÛw / zrywania po≥πczeÒ
+                    // ma≈Ça pauza zmniejsza ryzyko rate-limit√≥w / zrywania po≈ÇƒÖcze≈Ñ
                     await Task.Delay(250, ct);
                 }
 
@@ -452,30 +452,30 @@ namespace STSAnaliza
             if (string.IsNullOrWhiteSpace(msg))
                 return;
 
-            // pokaø w rozmowie
+            // poka≈º w rozmowie
             AppendChat($"Ty: {msg}");
 
-            // wyczyúÊ input
+            // wyczy≈õƒá input
             textBoxAnswer.Clear();
             textBoxAnswer.Focus();
 
-            // przekaø do pipeline (jak pipeline akurat czeka - dostanie od razu,
-            // jak nie czeka - wiadomoúÊ "poczeka" w kanale)
+            // przeka≈º do pipeline (jak pipeline akurat czeka - dostanie od razu,
+            // jak nie czeka - wiadomo≈õƒá "poczeka" w kanale)
             _userInput.Writer.TryWrite(msg);
         }
 
         private async void dataGridMatchList_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
         {
-            //if (e.RowIndex < 0) return; // klik w nag≥Ûwek itp.
+            //if (e.RowIndex < 0) return; // klik w nag≈Ç√≥wek itp.
 
             //if (_listMatches == null || _listMatches.Count == 0)
             //{
-            //    MessageBox.Show("Najpierw pobierz listÍ meczÛw.", "Info",
+            //    MessageBox.Show("Najpierw pobierz listƒô mecz√≥w.", "Info",
             //        MessageBoxButtons.OK, MessageBoxIcon.Information);
             //    return;
             //}
 
-            //// Najproúciej: indeks wiersza == indeks w _listMatches (jeúli grid jest zasilany tπ listπ w tej kolejnoúci)
+            //// Najpro≈õciej: indeks wiersza == indeks w _listMatches (je≈õli grid jest zasilany tƒÖ listƒÖ w tej kolejno≈õci)
             //var m = _listMatches[e.RowIndex];
 
             //tnListAnalyze.Enabled = false;
@@ -494,7 +494,7 @@ namespace STSAnaliza
             //{
             //    ct.ThrowIfCancellationRequested();
 
-            //    // index1Based = e.RowIndex+1, total = _listMatches.Count (øeby log wyglπda≥ podobnie jak w analizie listy)
+            //    // index1Based = e.RowIndex+1, total = _listMatches.Count (≈ºeby log wyglƒÖda≈Ç podobnie jak w analizie listy)
             //    await AnalyzeSingleMatchAsync(m, e.RowIndex + 1, _listMatches.Count, ct);
 
             //    AppendLineSafe(txtListOutput, "");
@@ -549,7 +549,7 @@ namespace STSAnaliza
                 // opcjonalnie: od razu na schowek
                 Clipboard.SetText(json);
 
-                MessageBox.Show("Log pobrany. Skopiowa≥em JSON do schowka (Ctrl+V).",
+                MessageBox.Show("Log pobrany. Skopiowa≈Çem JSON do schowka (Ctrl+V).",
                     "OK", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (OperationCanceledException)
@@ -560,8 +560,8 @@ namespace STSAnaliza
             {
                 WynikLog.Clear();
                 WynikLog.Text = ex.ToString();
-                MessageBox.Show("B≥πd pobierania logu:\n" + ex.Message,
-                    "B≥πd", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("B≈ÇƒÖd pobierania logu:\n" + ex.Message,
+                    "B≈ÇƒÖd", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -584,7 +584,7 @@ namespace STSAnaliza
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, "B≥πd", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(ex.Message, "B≈ÇƒÖd", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -630,7 +630,7 @@ namespace STSAnaliza
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, "B≥πd", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(ex.Message, "B≈ÇƒÖd", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {

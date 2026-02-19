@@ -1,4 +1,4 @@
-﻿namespace STSAnaliza.Models;
+namespace STSAnaliza.Models;
 
 public sealed record PlayerMatchSummary(
     DateTimeOffset StartTimeUtc,

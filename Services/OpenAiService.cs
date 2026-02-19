@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using OpenAI.Responses;
 using STSAnaliza.Interfejs;
 using System.Text.Json;

@@ -3,7 +3,7 @@ using STSAnaliza.Interfejs;
 namespace STSAnaliza.Services;
 
 /// <summary>
-/// Store krokÛw pipeline dla zak≥adki 1 (pojedynczy mecz).
+/// Store krok√≥w pipeline dla zak≈Çadki 1 (pojedynczy mecz).
 /// Bez duplikowania logiki (dziedziczymy z JsonPipelineStepStoreBase).
 /// </summary>
 public sealed class MatchPipelineStepStore : JsonPipelineStepStoreBase

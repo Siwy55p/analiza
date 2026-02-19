@@ -32,11 +32,11 @@ internal static class Program
 2. Turniej: {Tournament}
 3. Start: {Day} {Hour}
 
-P_est: [DO UZUPE£NIENIA]
-Dane: [DO UZUPE£NIENIA]
-Typ: [DO UZUPE£NIENIA]
-Kursy -> P_imp -> Edge: [DO UZUPE£NIENIA]
-Podsumowanie: [DO UZUPE£NIENIA]";
+P_est: [DO UZUPEÅNIENIA]
+Dane: [DO UZUPEÅNIENIA]
+Typ: [DO UZUPEÅNIENIA]
+Kursy -> P_imp -> Edge: [DO UZUPEÅNIENIA]
+Podsumowanie: [DO UZUPEÅNIENIA]";
 
         var host = Host.CreateDefaultBuilder()
             .ConfigureAppConfiguration(cfg =>

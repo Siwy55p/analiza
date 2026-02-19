@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Options;
 using STSAnaliza.Options;
 using System.Net.Http.Headers;
 using System.Text.Json;

@@ -1,4 +1,4 @@
-﻿using Microsoft.Playwright;
+using Microsoft.Playwright;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
