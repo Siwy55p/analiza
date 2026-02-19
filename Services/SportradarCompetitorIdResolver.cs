@@ -1,6 +1,4 @@
-using System.Collections.Concurrent;
-using System.Globalization;
-using System.Text;
+﻿using System.Collections.Concurrent;
 using System.Text.Json;
 
 namespace STSAnaliza.Services;
@@ -25,15 +23,14 @@ public sealed class SportradarCompetitorIdResolver : ICompetitorIdResolver
 
         await EnsureLoadedAsync(ct);
 
-        // kandydaci (różne formaty nazwy)
         foreach (var key in BuildCandidateKeys(playerName))
         {
             if (_map.TryGetValue(key, out var id))
                 return id;
         }
 
-        // fallback: proste "contains" (czasem działa na różne spacje/skrót)
-        var norm = Normalize(playerName);
+        // fallback: "contains" po znormalizowanym kluczu
+        var norm = SportradarName.NormalizeKey(playerName);
         foreach (var kv in _map)
         {
             if (kv.Key.Contains(norm, StringComparison.OrdinalIgnoreCase))
@@ -60,7 +57,6 @@ public sealed class SportradarCompetitorIdResolver : ICompetitorIdResolver
             var json = await _client.GetRankingsJsonAsync(ct);
             using var doc = JsonDocument.Parse(json);
 
-            // zbieramy wszystkie { competitor: { id, name } } z całego dokumentu
             Walk(doc.RootElement);
 
             _loadedAtUtc = DateTimeOffset.UtcNow;
@@ -85,7 +81,7 @@ public sealed class SportradarCompetitorIdResolver : ICompetitorIdResolver
                         var name = nameEl.GetString();
                         if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(name))
                         {
-                            var key = Normalize(name);
+                            var key = SportradarName.NormalizeKey(name);
                             _map.TryAdd(key, id);
                         }
                     }
@@ -104,20 +100,15 @@ public sealed class SportradarCompetitorIdResolver : ICompetitorIdResolver
 
     private static IEnumerable<string> BuildCandidateKeys(string input)
     {
-        var a = Normalize(input);
-        yield return a;
+        yield return SportradarName.NormalizeKey(input);
 
-        // jeżeli wejście jest "Imię Nazwisko", spróbuj też "Nazwisko, Imię"
+        // "Imię Nazwisko" -> "Nazwisko, Imię"
         if (!input.Contains(',') && input.Contains(' '))
-        {
-            yield return Normalize(ToLastCommaFirst(input));
-        }
+            yield return SportradarName.NormalizeKey(ToLastCommaFirst(input));
 
-        // jeżeli wejście jest "Nazwisko, Imię", spróbuj też "Imię Nazwisko"
+        // "Nazwisko, Imię" -> "Imię Nazwisko"
         if (input.Contains(','))
-        {
-            yield return Normalize(ToFirstLast(input));
-        }
+            yield return SportradarName.NormalizeKey(ToFirstLast(input));
     }
 
     private static string ToLastCommaFirst(string s)
@@ -140,24 +131,5 @@ public sealed class SportradarCompetitorIdResolver : ICompetitorIdResolver
         var last = parts[0].Trim();
         var first = parts[1].Trim();
         return $"{first} {last}";
-    }
-
-    private static string Normalize(string s)
-    {
-        s = s.Trim();
-        s = string.Join(' ', s.Split(' ', StringSplitOptions.RemoveEmptyEntries));
-
-        // usuń diakrytyki
-        var formD = s.Normalize(NormalizationForm.FormD);
-        var sb = new StringBuilder(formD.Length);
-        foreach (var ch in formD)
-        {
-            var uc = CharUnicodeInfo.GetUnicodeCategory(ch);
-            if (uc != UnicodeCategory.NonSpacingMark)
-                sb.Append(ch);
-        }
-
-        var clean = sb.ToString().Normalize(NormalizationForm.FormC);
-        return clean.ToUpperInvariant();
     }
 }

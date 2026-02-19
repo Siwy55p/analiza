@@ -1,6 +1,4 @@
-using System.Collections.Concurrent;
-using System.Globalization;
-using System.Text;
+﻿using System.Collections.Concurrent;
 using System.Text.Json;
 
 namespace STSAnaliza.Services;
@@ -37,8 +35,8 @@ public sealed class SportradarDailyMatchResolver : ISportradarDailyMatchResolver
 
         var json = await GetDailyJsonCachedAsync(date, ct);
 
-        var aTokens = NameTokens(playerAName);
-        var bTokens = NameTokens(playerBName);
+        var aTokens = SportradarName.Tokens(playerAName);
+        var bTokens = SportradarName.Tokens(playerBName);
 
         using var doc = JsonDocument.Parse(json);
 
@@ -79,7 +77,7 @@ public sealed class SportradarDailyMatchResolver : ISportradarDailyMatchResolver
             {
                 if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(name)) continue;
 
-                var t = NameTokens(name);
+                var t = SportradarName.Tokens(name);
 
                 if (aId is null && IsSubset(aTokens, t))
                     aId = id;
@@ -107,54 +105,10 @@ public sealed class SportradarDailyMatchResolver : ISportradarDailyMatchResolver
 
     private static bool IsSubset(HashSet<string> need, HashSet<string> have)
     {
-        // wszystkie tokeny z nazwy STS muszą wystąpić w nazwie z API
         foreach (var x in need)
             if (!have.Contains(x))
                 return false;
 
         return true;
-    }
-
-    private static HashSet<string> NameTokens(string s)
-    {
-        s = s.Trim();
-
-        // usuń diakrytyki
-        var formD = s.Normalize(NormalizationForm.FormD);
-        var sb = new StringBuilder(formD.Length);
-        foreach (var ch in formD)
-        {
-            var uc = CharUnicodeInfo.GetUnicodeCategory(ch);
-            if (uc != UnicodeCategory.NonSpacingMark)
-                sb.Append(ch);
-        }
-        var clean = sb.ToString().Normalize(NormalizationForm.FormC).ToUpperInvariant();
-
-        // tokenizacja: litery/cyfry jako tokeny, reszta = separator
-        var tokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var buf = new StringBuilder();
-
-        void Flush()
-        {
-            if (buf.Length > 0)
-            {
-                tokens.Add(buf.ToString());
-                buf.Clear();
-            }
-        }
-
-        foreach (var ch in clean)
-        {
-            if (char.IsLetterOrDigit(ch))
-                buf.Append(ch);
-            else
-                Flush();
-        }
-        Flush();
-
-        // mała higiena: wywal 1-literowe tokeny (np. inicjały)
-        tokens.RemoveWhere(t => t.Length <= 1);
-
-        return tokens;
     }
 }
