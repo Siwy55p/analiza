@@ -42,7 +42,6 @@ namespace STSAnaliza
             dgvSteps.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
             dgvSteps.RowsDefaultCellStyle.Alignment = DataGridViewContentAlignment.TopLeft;
 
-
             RefreshPromptOnlyUiState();
         }
 
@@ -109,9 +108,6 @@ namespace STSAnaliza
         }
         //koniec trzech stanow
 
-
-
-
         protected override async void OnShown(EventArgs e)
         {
             base.OnShown(e);
@@ -142,44 +138,43 @@ namespace STSAnaliza
         {
             dgvSteps.EndEdit();
 
-            var list = _binding.Where(s => s != null).OrderBy(s => s.Order).ToList();
+            // usuń puste wiersze dodane przez grid
+            var list = _binding
+                .Where(s => !(s.Order == 0 && string.IsNullOrWhiteSpace(s.Title) && string.IsNullOrWhiteSpace(s.Prompt)))
+                .ToList();
 
-            for (int i = 0; i < list.Count; i++)
-            {
-                if (list[i].Order <= 0) list[i].Order = i + 1;
-                if (string.IsNullOrWhiteSpace(list[i].Title)) list[i].Title = $"Krok {list[i].Order}";
-
-            }
+            ReorderOrders(list);
 
             await _store.SaveAsync(list);
-            MessageBox.Show("Zapisano kroki.", "OK", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+            MessageBox.Show("Zapisano.", "OK", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private static void ReorderOrders(List<StepDefinition> steps)
+        {
+            for (int i = 0; i < steps.Count; i++)
+                steps[i].Order = i + 1;
+        }
+
+        private void ReorderOrders()
+        {
+            ReorderOrders(_binding.ToList());
+            dgvSteps.Refresh();
         }
 
         private int? GetSelectedIndex()
         {
-            if (dgvSteps.CurrentRow == null) return null;
-            if (dgvSteps.CurrentRow.Index < 0) return null;
-            if (dgvSteps.CurrentRow.Index >= _binding.Count) return null;
-            return dgvSteps.CurrentRow.Index;
+            var idx = dgvSteps.CurrentRow?.Index ?? -1;
+            if (idx < 0 || idx >= _binding.Count) return null;
+            return idx;
         }
 
         private void SelectRow(int index)
         {
             if (index < 0 || index >= dgvSteps.Rows.Count) return;
-
             dgvSteps.ClearSelection();
             dgvSteps.Rows[index].Selected = true;
-
-            if (dgvSteps.Columns.Count > 0)
-                dgvSteps.CurrentCell = dgvSteps.Rows[index].Cells[0];
-        }
-
-        private void ReorderOrders()
-        {
-            for (int i = 0; i < _binding.Count; i++)
-                _binding[i].Order = i + 1;
-
-            dgvSteps.Refresh();
+            dgvSteps.CurrentCell = dgvSteps.Rows[index].Cells[0];
         }
 
         private void MoveRow(int delta)
@@ -191,7 +186,6 @@ namespace STSAnaliza
 
             int from = idx.Value;
             int to = from + delta;
-
             if (to < 0 || to >= _binding.Count) return;
 
             var item = _binding[from];
@@ -223,6 +217,7 @@ namespace STSAnaliza
                 Prompt = src.Prompt,
                 Enabled = src.Enabled,
                 KursBuch = src.KursBuch,
+                WebSearch = src.WebSearch,
             };
 
             _binding.Insert(i + 1, copy);
@@ -239,11 +234,8 @@ namespace STSAnaliza
 
             if (dgvSteps.Columns["Order"] != null) dgvSteps.Columns["Order"].Width = 20;
             if (dgvSteps.Columns["Enabled"] != null) dgvSteps.Columns["Enabled"].Width = 30;
-            if (dgvSteps.Columns["TimeoutSeconds"] != null) dgvSteps.Columns["TimeoutSeconds"].Width = 90;
-            if (dgvSteps.Columns["RequiresMarkets"] != null) dgvSteps.Columns["RequiresMarkets"].Width = 120;
 
             if (dgvSteps.Columns["KursBuch"] != null) dgvSteps.Columns["KursBuch"].Width = 95;
-            if (dgvSteps.Columns["TargetSectionNumber"] != null) dgvSteps.Columns["TargetSectionNumber"].Width = 120;
 
             if (dgvSteps.Columns["Title"] != null)
                 dgvSteps.Columns["Title"].Width = 50;
@@ -269,7 +261,6 @@ namespace STSAnaliza
             txtPrompt.Text = _binding[idx].Prompt ?? "";
 
             chkPromptOnly.Checked = _binding[idx].KursBuch;
-
 
             _syncingPrompt = false;
 
@@ -299,81 +290,20 @@ namespace STSAnaliza
 
             _binding[idx].KursBuch = chkPromptOnly.Checked;
 
-
             dgvSteps.Refresh();
             RefreshPromptOnlyUiState();
         }
 
-        private void nudTargetSection_ValueChanged(object? sender, EventArgs e)
-        {
-            if (_syncingPrompt) return;
-
-            var idx = dgvSteps.CurrentRow?.Index ?? -1;
-            if (idx < 0 || idx >= _binding.Count) return;
-
-            if (!_binding[idx].KursBuch)
-                return;
-
-
-            dgvSteps.Refresh();
-        }
-
         private void RefreshPromptOnlyUiState()
         {
-            var enabled = chkPromptOnly.Checked;
-        }
-
-        private void btnDelete_Click(object sender, EventArgs e)
-        {
-            dgvSteps.EndEdit();
-
-            var idx = GetSelectedIndex();
-            if (idx == null)
-            {
-                MessageBox.Show("Zaznacz krok do usunięcia.", "Brak zaznaczenia",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            var step = _binding[idx.Value];
-            var title = string.IsNullOrWhiteSpace(step.Title) ? $"Krok {step.Order}" : step.Title;
-
-            var confirm = MessageBox.Show(
-                $"Usunąć krok?\n\n{title}",
-                "Potwierdź usunięcie",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning
-            );
-
-            if (confirm != DialogResult.Yes)
-                return;
-
-            int removeIndex = idx.Value;
-            _binding.RemoveAt(removeIndex);
-
-            ReorderOrders();
-            SelectRowSafe(removeIndex);
-        }
-
-        private void SelectRowSafe(int index)
-        {
-            if (dgvSteps.Rows.Count == 0) return;
-
-            if (index < 0) index = 0;
-            if (index >= dgvSteps.Rows.Count) index = dgvSteps.Rows.Count - 1;
-
-            dgvSteps.ClearSelection();
-            dgvSteps.Rows[index].Selected = true;
-
-            if (dgvSteps.Columns.Count > 0)
-                dgvSteps.CurrentCell = dgvSteps.Rows[index].Cells[0];
+            // jeżeli masz dodatkowe sterowanie UI zależne od KursBuch – zostaw tutaj
         }
 
         private void dgvSteps_KeyDown(object? sender, KeyEventArgs e)
         {
-            if (e.KeyCode == Keys.Delete)
+            if (e.Control && e.KeyCode == Keys.D)
             {
-                btnDelete_Click(sender!, EventArgs.Empty);
+                btnDuplicate_Click(sender!, EventArgs.Empty);
                 e.Handled = true;
             }
         }

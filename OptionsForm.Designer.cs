@@ -104,7 +104,6 @@
             btnDelete.TabIndex = 6;
             btnDelete.Text = "Usuń";
             btnDelete.UseVisualStyleBackColor = true;
-            btnDelete.Click += btnDelete_Click;
             // 
             // btnDuplicate
             // 

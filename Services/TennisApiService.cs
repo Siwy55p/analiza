@@ -8,7 +8,7 @@ using System.Text.Json;
 
 namespace STSAnaliza.Services;
 
-public sealed class TennisApiService : ITennisApiService
+public sealed partial class TennisApiService : ITennisApiService
 {
     private readonly ISportradarTennisClient _client;
     private readonly ICompetitorIdResolver _resolver;
@@ -855,80 +855,20 @@ public sealed class TennisApiService : ITennisApiService
 
     // LAST 52 WEEKS overall (B)
     public async Task<(string Fill12_3, string Fill12_4)> BuildFill12_3_12_4_ServeReturn_Last52WeeksOverallAsync(
-        string playerBName, string? competitorIdB,
-        CancellationToken ct)
+    string playerBName, string? competitorIdB,
+    CancellationToken ct)
     {
-        ct.ThrowIfCancellationRequested();
-
-        var idB = !string.IsNullOrWhiteSpace(competitorIdB)
-            ? NormalizeId(competitorIdB)
-            : await _resolver.ResolveAsync(playerBName, ct);
-
-        if (string.IsNullOrWhiteSpace(idB))
-            return ("hold%: brak\n1st won%: brak\n2nd serve points won%: brak", "break%: brak");
-
-        var since = DateTimeOffset.UtcNow.AddDays(-365);
-
-        var metrics = await ComputeServeReturnSinceAsync(
-            idB, since,
-            maxEventsToTry: 35,
-            minMatchesWithStats: 8,
-            ct);
-
-        string Pct(double? x) => x is null
-            ? "brak"
-            : (x.Value * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%";
-
-        var fill12_3 =
-            $"hold%: {Pct(metrics.HoldPct)}\n" +
-            $"2nd serve points won%: {Pct(metrics.SecondWonPct)}\n" +
-            $"1st won%: {Pct(metrics.FirstWonPct)}";
-
-        var fill12_4 =
-            metrics.BreakPct is null || metrics.TotalBreakpoints <= 0
-                ? "break%: brak"
-                : $"break%: {Pct(metrics.BreakPct)} ({metrics.BreakpointsWon}/{metrics.TotalBreakpoints})";
-
-        return (fill12_3, fill12_4);
+        var (serve, ret) = await BuildServeReturn_Last52WeeksOverallCoreAsync(playerBName, competitorIdB, ct);
+        return (serve, ret);
     }
 
     // LAST 52 WEEKS overall (A)
     public async Task<(string Fill11_3, string Fill11_4)> BuildFill11_3_11_4_ServeReturn_Last52WeeksOverallAsync(
-        string playerAName, string? competitorIdA,
-        CancellationToken ct)
+    string playerAName, string? competitorIdA,
+    CancellationToken ct)
     {
-        ct.ThrowIfCancellationRequested();
-
-        var idA = !string.IsNullOrWhiteSpace(competitorIdA)
-            ? NormalizeId(competitorIdA)
-            : await _resolver.ResolveAsync(playerAName, ct);
-
-        if (string.IsNullOrWhiteSpace(idA))
-            return ("hold%: brak\n1st won%: brak\n2nd serve points won%: brak", "break%: brak");
-
-        var since = DateTimeOffset.UtcNow.AddDays(-365);
-
-        var metrics = await ComputeServeReturnSinceAsync(
-            idA, since,
-            maxEventsToTry: 35,
-            minMatchesWithStats: 8,
-            ct);
-
-        string Pct(double? x) => x is null
-            ? "brak"
-            : (x.Value * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%";
-
-        var fill11_3 =
-            $"hold%: {Pct(metrics.HoldPct)}\n" +
-            $"1st won%: {Pct(metrics.FirstWonPct)}\n" +
-            $"2nd serve points won%: {Pct(metrics.SecondWonPct)}";
-
-        var fill11_4 =
-            metrics.BreakPct is null || metrics.TotalBreakpoints <= 0
-                ? "break%: brak"
-                : $"break%: {Pct(metrics.BreakPct)} ({metrics.BreakpointsWon}/{metrics.TotalBreakpoints})";
-
-        return (fill11_3, fill11_4);
+        var (serve, ret) = await BuildServeReturn_Last52WeeksOverallCoreAsync(playerAName, competitorIdA, ct);
+        return (serve, ret);
     }
 
     public async Task<(string Fill11_3, string Fill11_4)> BuildFill11_3_11_4_ServeReturn_Last10Async(

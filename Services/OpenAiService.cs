@@ -123,7 +123,7 @@ public sealed class OpenAiService : IOpenAiService
     // 2) Tryb rozmowy (z pamięcią)
     // -----------------------
     public void StartChat(string? systemPrompt = null)
-        => StartChat(systemPrompt, enableWebSearch: true); // zachowuje stare zachowanie (web domyślnie ON)
+       => StartChat(systemPrompt, enableWebSearch: true);
 
     public void StartChat(string? systemPrompt, bool enableWebSearch)
     {
@@ -132,8 +132,8 @@ public sealed class OpenAiService : IOpenAiService
         _chatGate.Wait();
         try
         {
-            _previousResponseId = null;         // reset rozmowy
-            _enableWebSearch = enableWebSearch; // domyślne ustawienie dla rozmowy (można nadpisać per-call)
+            _previousResponseId = null;        // reset rozmowy
+            _enableWebSearch = enableWebSearch; // ustawienie dla rozmowy
         }
         finally
         {
