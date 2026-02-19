@@ -46,7 +46,11 @@ public sealed class SportradarThrottlingHandler : DelegatingHandler
         try
         {
             var original = request;
-
+            // bezpiecznie retry tylko dla zapytań bez body (Sportradar to praktycznie zawsze GET)
+            if (request.Method != HttpMethod.Get && request.Method != HttpMethod.Head)
+            {
+                return await base.SendAsync(request, ct).ConfigureAwait(false);
+            }
             for (int attempt = 0; ; attempt++)
             {
                 await AcquireTokenAsync(ct).ConfigureAwait(false);

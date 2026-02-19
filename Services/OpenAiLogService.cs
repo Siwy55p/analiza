@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Options;
+using STSAnaliza.Options;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
@@ -15,20 +16,22 @@ public sealed class OpenAiLogService : IOpenAiLogService
     private readonly string _apiKey;
     private readonly string? _projectId;
 
-    public OpenAiLogService(HttpClient http, IConfiguration cfg)
+    public OpenAiLogService(HttpClient http, IOptions<OpenAiOptions> opt)
     {
         _http = http;
 
-        // użyj tego samego klucza co w reszcie appki:
+        var o = opt.Value;
+
+        // ApiKey zwykle przyjdzie z appsettings / ENV provider (OpenAI__ApiKey)
+        // ale zostawiam też fallback na OPENAI_API_KEY (Twoje wcześniejsze podejście)
         _apiKey =
-            cfg["OpenAI:ApiKey"]
-            ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY")
+            !string.IsNullOrWhiteSpace(o.ApiKey) ? o.ApiKey :
+            Environment.GetEnvironmentVariable("OPENAI_API_KEY")
             ?? throw new InvalidOperationException("Brak OpenAI API Key. Ustaw OpenAI:ApiKey lub zmienną OPENAI_API_KEY.");
 
-        // opcjonalnie (jeśli używasz projektów i chcesz precyzyjnie wskazać):
         _projectId =
-            cfg["OpenAI:ProjectId"]
-            ?? Environment.GetEnvironmentVariable("OPENAI_PROJECT_ID");
+            !string.IsNullOrWhiteSpace(o.ProjectId) ? o.ProjectId :
+            Environment.GetEnvironmentVariable("OPENAI_PROJECT_ID");
     }
 
     public async Task<string> GetResponseLogAsync(string respId, CancellationToken ct = default)
@@ -58,9 +61,6 @@ public sealed class OpenAiLogService : IOpenAiLogService
     private static string PrettyJson(string json)
     {
         using var doc = JsonDocument.Parse(json);
-        return JsonSerializer.Serialize(doc, new JsonSerializerOptions
-        {
-            WriteIndented = true
-        });
+        return JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true });
     }
 }

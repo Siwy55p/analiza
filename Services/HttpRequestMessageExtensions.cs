@@ -1,23 +1,36 @@
-﻿using System.Net.Http;
+﻿using System.Net.Http.Headers;
 
 namespace STSAnaliza.Services;
 
 internal static class HttpRequestMessageExtensions
 {
-    public static HttpRequestMessage CloneShallow(this HttpRequestMessage req)
+    /// <summary>
+    /// Tworzy płytką kopię requestu (metoda, URI, nagłówki, opcje).
+    /// Uwaga: Content jest kopiowany jako referencja (nie zawsze jest re-sendable).
+    /// Dla GET (typowe w Sportradar) to wystarcza.
+    /// </summary>
+    public static HttpRequestMessage CloneShallow(this HttpRequestMessage request)
     {
-        var clone = new HttpRequestMessage(req.Method, req.RequestUri)
+        var clone = new HttpRequestMessage(request.Method, request.RequestUri)
         {
-            Version = req.Version,
-            VersionPolicy = req.VersionPolicy
+            Version = request.Version,
+            VersionPolicy = request.VersionPolicy,
+            Content = request.Content
         };
 
-        foreach (var h in req.Headers)
-            clone.Headers.TryAddWithoutValidation(h.Key, h.Value);
+        // nagłówki
+        foreach (var header in request.Headers)
+            clone.Headers.TryAddWithoutValidation(header.Key, header.Value);
 
-        // Bezpieczne dla GET (bez Content). Jeśli kiedyś dodasz POST -> dopisz klonowanie Content.
-        if (req.Content is not null)
-            throw new NotSupportedException("CloneShallow obsługuje tylko requesty bez Content (np. GET).");
+        // options (w .NET 6+)
+        foreach (var opt in request.Options)
+            clone.Options.TryAdd(opt.Key, opt.Value);
+
+        // properties (dla kompatybilności jeśli gdzieś używasz)
+#pragma warning disable CS0618
+        foreach (var prop in request.Properties)
+            clone.Properties[prop.Key] = prop.Value;
+#pragma warning restore CS0618
 
         return clone;
     }
