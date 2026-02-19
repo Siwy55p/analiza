@@ -12,7 +12,7 @@ namespace STSAnaliza
     public partial class Form1 : Form
     {
         private readonly ITennisApiService _tennisApi;
-
+        private readonly IOpenAiService _openAiService;
 
         private readonly IMatchBalanceFillBuilder _balanceBuilder;
 
@@ -38,30 +38,49 @@ namespace STSAnaliza
 
         private readonly StsMatchListScraper _listScraper;
 
-        public Form1(IMatchRawJsonBuilder matchRawJsonBuilder,
-            //IMatchRawFillService matchRawFill,
-            ISportradarDailyMatchResolver  dailyMatchResolver,
-            IMatchBalanceFillBuilder balanceBuilder,
-            ITennisApiService tennisApi, 
-            IMatchListPipelineStepStore listStepStore, 
-            IServiceProvider sp, 
-            StsMatchListScraper listScraper, 
-            MatchListPipeline listPipeline, 
-            IOpenAiLogService logService)
+        public Form1()
         {
             InitializeComponent();
+
+            _tennisApi = null!;
+            _openAiService = null!;
+            _balanceBuilder = null!;
+            _dailyResolver = null!;
+            _matchRawJsonBuilder = null!;
+            _sp = null!;
+            _logService = null!;
+            _listStepStore = null!;
+            _listPipeline = null!;
+            _listScraper = null!;
+        }
+
+        [ActivatorUtilitiesConstructor]
+        public Form1(
+            IMatchRawJsonBuilder matchRawJsonBuilder,
+            ISportradarDailyMatchResolver dailyMatchResolver,
+            IMatchBalanceFillBuilder balanceBuilder,
+            ITennisApiService tennisApi,
+            IMatchListPipelineStepStore listStepStore,
+            IServiceProvider sp,
+            StsMatchListScraper listScraper,
+            MatchListPipeline listPipeline,
+            IOpenAiLogService logService,
+            IOpenAiService openAiService
+        ) : this()
+        {
             _listScraper = listScraper;
             _listStepStore = listStepStore;
             _sp = sp;
             _listPipeline = listPipeline;
             _logService = logService;
+
             _tennisApi = tennisApi;
             _dailyResolver = dailyMatchResolver;
-            //_matchRawFill = matchRawFill;
             _matchRawJsonBuilder = matchRawJsonBuilder;
             _balanceBuilder = balanceBuilder;
-        }
 
+            _openAiService = openAiService;
+        }
 
         private void ShowNonModal<TForm>(ref TForm? instance, Func<TForm> factory, Action onClosed)
      where TForm : Form
@@ -119,6 +138,13 @@ namespace STSAnaliza
 
         private async void tnListAnalyze_Click(object sender, EventArgs e)
         {
+            if (_openAiService is null)
+            {
+                MessageBox.Show("OpenAI service nie jest zainicjalizowany.", "B³¹d",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
             if (_listMatches == null || _listMatches.Count == 0)
             {
                 MessageBox.Show("Najpierw pobierz listê meczów.", "Info",
@@ -438,60 +464,6 @@ namespace STSAnaliza
             _userInput.Writer.TryWrite(msg);
         }
 
-
-
-        // Zast¹p MatchItem prawdziwym typem elementu z _listMatches (tym co ma Tournament/PlayerA/PlayerB/Day/Hour)
-        private async Task AnalyzeSingleMatchAsync(MatchListItem m, int index1Based, int total, CancellationToken ct)
-        {
-
-
-
-
-            AppendLineSafe(txtListOutput, "");
-            AppendLineSafe(txtListOutput, $"[{index1Based}/{total}] {m.Tournament}");
-            AppendLineSafe(txtListOutput, $"  {m.PlayerA} vs {m.PlayerB} | {m.Day} {m.Hour}");
-
-            using var perMatchCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            perMatchCts.CancelAfter(TimeSpan.FromMinutes(60));
-
-
-
-            var jsonA = await _matchRawJsonBuilder.BuildAsync(m.PlayerA, perMatchCts.Token);
-            var jsonB = await _matchRawJsonBuilder.BuildAsync(m.PlayerB, perMatchCts.Token);
-
-            var prefilled = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["<<FILL_11_1>>"] = jsonA,
-                ["<<FILL_12_1>>"] = jsonB
-            };
-
-
-            try
-            {
-                var res = await _listPipeline.AnalyzeAsyncInteractive(
-                        m,
-                        waitUserMessageAsync: WaitUserMsgAsync,
-                        onChat: txt => AppendLineSafe(rtbdoc, txt),
-                        onStep: (stepNo, stepTotal, stepTitle) =>
-                        {
-                            AppendLineSafe(txtListOutput, $"   krok {stepNo}/{stepTotal}: {stepTitle}");
-                        },
-                        prefilled: prefilled,
-                        ct: perMatchCts.Token
-                    );
-
-                AppendLineSafe(rtbdoc, res);
-            }
-            catch (OperationCanceledException)
-            {
-                AppendLineSafe(txtListOutput, "  [PRZERWANO] Timeout lub anulowano.");
-            }
-            catch (Exception ex)
-            {
-                AppendLineSafe(txtListOutput, $"  [B£¥D] {ex.Message}");
-            }
-        }
-
         private async void dataGridMatchList_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
         {
             //if (e.RowIndex < 0) return; // klik w nag³ówek itp.
@@ -547,10 +519,6 @@ namespace STSAnaliza
 
         }
 
-        private void Form1_Load(object sender, EventArgs e)
-        {
-
-        }
 
         private async void btnPobierzLog_Click(object sender, EventArgs e)
         {

@@ -10,7 +10,7 @@ namespace STSAnaliza.Services;
 public sealed class OpenAiService : IOpenAiService
 {
     private readonly ResponsesClient _responsesClient;
-    private readonly ILogger<OpenAiService> _logger;
+    private readonly ILogger<OpenAiService> _logger; 
 
     // rozmowa “stateful” po stronie Responses API
     private readonly SemaphoreSlim _chatGate = new(1, 1);
@@ -21,12 +21,12 @@ public sealed class OpenAiService : IOpenAiService
     public string? LastResponseId { get; private set; }
 
     public sealed record OpenAiUsageSnapshot(
-    int InputTokenCount,
-    int OutputTokenCount,
-    int TotalTokenCount,
-    int CachedTokenCount,
-    int ReasoningTokenCount
-);
+        int InputTokenCount,
+        int OutputTokenCount,
+        int TotalTokenCount,
+        int CachedTokenCount,
+        int ReasoningTokenCount
+    );
 
     public OpenAiUsageSnapshot? LastUsage { get; private set; }
 
@@ -37,12 +37,10 @@ public sealed class OpenAiService : IOpenAiService
     // jeśli TRUE -> web_search poleci ZAWSZE (drożej/wolniej)
     private readonly bool _forceWebSearchEveryCall = false;
 
-
+    // ustawiane StartChat(...)
     private bool _enableWebSearch;
 
-
-
-    public OpenAiService(ResponsesClient responsesClient, ILogger<OpenAiService> logger)
+    public OpenAiService(ResponsesClient responsesClient, ILogger<OpenAiService> logger) // <-- TU
     {
         _responsesClient = responsesClient;
         _logger = logger;
@@ -50,16 +48,19 @@ public sealed class OpenAiService : IOpenAiService
         var dir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "STSAnaliza",
-            "OpenAI");
+            "OpenAI"
+        );
 
         Directory.CreateDirectory(dir);
         _logPath = Path.Combine(dir, "openai_calls.jsonl");
     }
-
     // -----------------------
     // 1) One-shot (bez pamięci)
     // -----------------------
-    public async Task<string> SendPromptAsync(string prompt, CancellationToken cancellationToken = default)
+    public Task<string> SendPromptAsync(string prompt, CancellationToken cancellationToken = default)
+        => SendPromptAsync(prompt, enableWebSearch: true, cancellationToken);
+
+    public async Task<string> SendPromptAsync(string prompt, bool enableWebSearch, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(prompt))
             throw new ArgumentException("Prompt nie może być pusty.", nameof(prompt));
@@ -70,9 +71,12 @@ public sealed class OpenAiService : IOpenAiService
 
         try
         {
-            var options = CreateWebOptions(instructions: null, previousResponseId: null, enableWebSearch: true);
-            //var options = CreateWebOptions(instructions: null, previousResponseId: null, enableWebSearch: _enableWebSearch);
-            //var options = CreateWebOptions(instructions: null, previousResponseId: null);
+            var options = CreateWebOptions(
+                instructions: null,
+                previousResponseId: null,
+                enableWebSearch: enableWebSearch
+            );
+
             options.InputItems.Add(ResponseItem.CreateUserMessageItem(prompt));
 
             ResponseResult response = await _responsesClient.CreateResponseAsync(options, cancellationToken);
@@ -92,12 +96,9 @@ public sealed class OpenAiService : IOpenAiService
                 userPreview = Trunc(prompt, 400),
                 outputPreview = Trunc(text, 800),
                 forceWebSearch = _forceWebSearchEveryCall,
+                webSearchEnabled = enableWebSearch,
                 usage = LastUsage,
             }, cancellationToken);
-
-
-
-
 
             return text;
         }
@@ -131,8 +132,8 @@ public sealed class OpenAiService : IOpenAiService
         _chatGate.Wait();
         try
         {
-            _previousResponseId = null; // reset rozmowy
-            _enableWebSearch = enableWebSearch; // <<< KLUCZ: ustawienie per-krok
+            _previousResponseId = null;         // reset rozmowy
+            _enableWebSearch = enableWebSearch; // domyślne ustawienie dla rozmowy (można nadpisać per-call)
         }
         finally
         {
@@ -140,7 +141,12 @@ public sealed class OpenAiService : IOpenAiService
         }
     }
 
-    public async Task<string> SendChatAsync(string userMessage, CancellationToken cancellationToken = default)
+    // kompatybilna metoda (używa _enableWebSearch ustawionego w StartChat)
+    public Task<string> SendChatAsync(string userMessage, CancellationToken cancellationToken = default)
+        => SendChatAsync(userMessage, enableWebSearch: _enableWebSearch, cancellationToken);
+
+    // NOWE: per-call web_search (dla pojedynczego kroku)
+    public async Task<string> SendChatAsync(string userMessage, bool enableWebSearch, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(userMessage))
             throw new ArgumentException("Wiadomość nie może być pusta.", nameof(userMessage));
@@ -153,14 +159,19 @@ public sealed class OpenAiService : IOpenAiService
             // instructions NIE “dziedziczą się” przy previous_response_id -> wysyłamy zawsze
             var prev = _previousResponseId;
 
-            var options = CreateWebOptions(instructions: _systemPrompt, previousResponseId: prev, enableWebSearch: _enableWebSearch);
-            //var options = CreateWebOptions(instructions: _systemPrompt, previousResponseId: prev);
+            var options = CreateWebOptions(
+                instructions: _systemPrompt,
+                previousResponseId: prev,
+                enableWebSearch: enableWebSearch
+            );
+
             options.InputItems.Add(ResponseItem.CreateUserMessageItem(userMessage));
 
             ResponseResult response = await _responsesClient.CreateResponseAsync(options, cancellationToken);
 
             // zapamiętaj stan rozmowy po stronie API
             _previousResponseId = response.Id;
+
             LastResponseId = response.Id;
             LastUsage = ExtractUsage(response);
 
@@ -176,7 +187,7 @@ public sealed class OpenAiService : IOpenAiService
                 userPreview = Trunc(userMessage, 400),
                 outputPreview = Trunc(text, 800),
                 forceWebSearch = _forceWebSearchEveryCall,
-                webSearchEnabled = _enableWebSearch,
+                webSearchEnabled = enableWebSearch,
                 usage = LastUsage,
             }, cancellationToken);
 
@@ -224,8 +235,9 @@ public sealed class OpenAiService : IOpenAiService
     {
         var options = new CreateResponseOptions();
 
-        // web_search tylko gdy enableWebSearch==true
-        if (enableWebSearch)
+        // web_search tylko gdy enableWebSearch==true (lub wymuszenie globalne)
+        var webOn = enableWebSearch || _forceWebSearchEveryCall;
+        if (webOn)
         {
             options.Tools.Add(ResponseTool.CreateWebSearchTool());
 
@@ -248,6 +260,7 @@ public sealed class OpenAiService : IOpenAiService
         try
         {
             var line = JsonSerializer.Serialize(entry);
+
             await _logGate.WaitAsync(ct);
             try
             {
@@ -290,14 +303,18 @@ public sealed class OpenAiService : IOpenAiService
     private static OpenAiUsageSnapshot? ExtractUsage(ResponseResult response)
     {
         var u = response.Usage;
-        if (u is null) return null;
+        if (u is null)
+            return null;
+
+        var cached = u.InputTokenDetails?.CachedTokenCount ?? 0;
+        var reasoning = u.OutputTokenDetails?.ReasoningTokenCount ?? 0;
 
         return new OpenAiUsageSnapshot(
             InputTokenCount: u.InputTokenCount,
             OutputTokenCount: u.OutputTokenCount,
             TotalTokenCount: u.TotalTokenCount,
-            CachedTokenCount: u.InputTokenDetails.CachedTokenCount,
-            ReasoningTokenCount: u.OutputTokenDetails.ReasoningTokenCount
+            CachedTokenCount: cached,
+            ReasoningTokenCount: reasoning
         );
     }
 }
