@@ -115,6 +115,9 @@ Podsumowanie: [DO UZUPEŁNIENIA]";
                 // budowanie prefilled placeholderów (logika "auto" poza Form1)
                 services.AddSingleton<IMatchPrefillBuilder, MatchPrefillBuilder>();
 
+                // analiza jednego meczu z listy (pipeline + prefill + metryki)
+                services.AddSingleton<IMatchListAnalyzer, MatchListAnalyzer>();
+
                 services.AddSingleton<MatchListPipeline>();
 
                 services.AddHttpClient<IOpenAiLogService, OpenAiLogService>();
