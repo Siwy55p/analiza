@@ -1,4 +1,5 @@
-namespace STSAnaliza.Interfejs;
+﻿namespace STSAnaliza.Interfejs;
+using STSAnaliza.Models;
 
 public interface IPipelineStepStore
 {

@@ -1,5 +1,6 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using STSAnaliza.Interfejs;
+using STSAnaliza.Models;
 
 namespace STSAnaliza
 {

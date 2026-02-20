@@ -30,10 +30,6 @@ public sealed partial class TennisApiService : ITennisApiService
     private readonly ConcurrentDictionary<string, (DateTimeOffset FetchedAtUtc, IReadOnlyList<PlayerMatchSummary> Matches)> _recentCache
         = new(StringComparer.OrdinalIgnoreCase);
 
-    // cache: sportEventId -> parsed DTO (opcjonalnie)
-    private readonly ConcurrentDictionary<string, (DateTimeOffset FetchedAtUtc, SportEventSummaryDto Dto)> _eventSummaryCache
-        = new(StringComparer.OrdinalIgnoreCase);
-
     // cache: sportEventId -> raw json (do szybkiej ekstrakcji statów)
     private readonly ConcurrentDictionary<string, (DateTimeOffset FetchedAtUtc, string Json)> _eventSummaryJsonCache
         = new(StringComparer.OrdinalIgnoreCase);

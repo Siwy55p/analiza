@@ -1,4 +1,6 @@
 ﻿namespace STSAnaliza.Services;
+using STSAnaliza.Models;
+
 
 /// <summary>
 /// Store kroków pipeline dla zakładki 1 (pojedynczy mecz).

@@ -1,6 +1,7 @@
-using STSAnaliza.Interfejs;
+﻿using STSAnaliza.Interfejs;
 using System.Text;
 using System.Text.RegularExpressions;
+using STSAnaliza.Models;
 
 namespace STSAnaliza.Services;
 

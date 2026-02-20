@@ -1,4 +1,7 @@
-namespace STSAnaliza.Services;
+﻿namespace STSAnaliza.Services;
+
+using STSAnaliza.Models;
+
 
 /// <summary>
 /// Fabryka domyślnej konfiguracji kroków dla pipeline analizującego pojedynczy mecz (zakładka 1).

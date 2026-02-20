@@ -1,4 +1,6 @@
-﻿namespace STSAnaliza
+﻿using STSAnaliza.Models;
+
+namespace STSAnaliza
 {
     public static class MatchListStepDefaults
     {
