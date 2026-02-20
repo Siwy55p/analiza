@@ -1,12 +1,7 @@
-﻿using STSAnaliza.Models;
-using STSAnaliza.Interfejs;
+﻿using STSAnaliza.Interfejs;
+using STSAnaliza.Models;
 
 namespace STSAnaliza.Services;
-
-public interface IMatchBalanceFillBuilder
-{
-    Task<string> BuildByCompetitorIdAsync(string playerName, string competitorId, CancellationToken ct);
-}
 
 public sealed class MatchBalanceFillBuilder : IMatchBalanceFillBuilder
 {
@@ -23,12 +18,6 @@ public sealed class MatchBalanceFillBuilder : IMatchBalanceFillBuilder
     {
         var all = await _tennisApi.GetRecentClosedSinglesMatchesAsync(competitorId, ct);
 
-        // filtr: pomijamy walkowery / puste wyniki
-        //var valid = all.Where(m => !IsWalkoverOrEmpty(m.Score)).ToList();
-
-        //if (valid.Count == 0)
-        //    return Format("brak danych", "brak danych", "brak danych");
-
         var now = DateTimeOffset.UtcNow;
         var start10w = now.AddDays(-70);
         var start12m = now.AddMonths(-12);
@@ -41,7 +30,6 @@ public sealed class MatchBalanceFillBuilder : IMatchBalanceFillBuilder
         string wl12m = m12.Count > 0 ? $"{CountWL(m12).W}-{CountWL(m12).L}" : "brak danych";
         string wl10w = m10.Count > 0 ? $"{CountWL(m10).W}-{CountWL(m10).L}" : "brak danych";
 
-        // “jakość” – max 2 zdania, możesz dopisać sample size
         var aor12 = await AvgOppRankAsync(m12, ct);
         var aor10 = await AvgOppRankAsync(m10, ct);
 
@@ -80,6 +68,7 @@ public sealed class MatchBalanceFillBuilder : IMatchBalanceFillBuilder
         var opp = aor.HasValue ? $" średni ranking ~#{aor.Value}" : "";
         return $"{label}: {form}{opp} (n={total}).";
     }
+
     private async Task<int?> AvgOppRankAsync(List<PlayerMatchSummary> list, CancellationToken ct)
     {
         var ranks = new List<int>();
@@ -99,29 +88,8 @@ public sealed class MatchBalanceFillBuilder : IMatchBalanceFillBuilder
             if (r.HasValue) ranks.Add(r.Value);
         }
 
-        if (ranks.Count < 4) return null; // jak w Twoich zasadach (mało danych)
+        if (ranks.Count < 4) return null;
         return (int)Math.Round(ranks.Average(), 0);
-    }
-
-    private static string BuildQualitySentence(int w12, int l12, int? aor12, int w10, int l10, int? aor10)
-    {
-        string Part(int w, int l, int? aor, string label)
-        {
-            var total = w + l;
-            if (total <= 0) return $"{label}: brak danych";
-
-            var wr = (double)w / total; // win rate
-            var form =
-                wr >= 0.65 ? "bardzo dobry" :
-                wr >= 0.55 ? "solidny" :
-                wr >= 0.45 ? "mieszany" : "słaby";
-
-            var opp = aor.HasValue ? $" (średni ranking rywalek ~#{aor.Value})" : "";
-            return $"{label}: {form}{opp}";
-        }
-
-        // max 2 zdania:
-        return $"{Part(w12, l12, aor12, "12M")}. {Part(w10, l10, aor10, "10W")}.";
     }
 
     private static bool IsWalkoverOrEmpty(string score)

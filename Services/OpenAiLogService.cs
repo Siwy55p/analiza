@@ -1,14 +1,10 @@
-using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Options;
+using STSAnaliza.Interfejs;
 using STSAnaliza.Options;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
 namespace STSAnaliza.Services;
-
-public interface IOpenAiLogService
-{
-    Task<string> GetResponseLogAsync(string respId, CancellationToken ct = default);
-}
 
 public sealed class OpenAiLogService : IOpenAiLogService
 {
@@ -22,8 +18,6 @@ public sealed class OpenAiLogService : IOpenAiLogService
 
         var o = opt.Value;
 
-        // ApiKey zwykle przyjdzie z appsettings / ENV provider (OpenAI__ApiKey)
-        // ale zostawiam też fallback na OPENAI_API_KEY (Twoje wcześniejsze podejście)
         _apiKey =
             !string.IsNullOrWhiteSpace(o.ApiKey) ? o.ApiKey :
             Environment.GetEnvironmentVariable("OPENAI_API_KEY")

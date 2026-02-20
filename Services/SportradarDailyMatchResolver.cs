@@ -2,17 +2,7 @@
 using System.Text.Json;
 using STSAnaliza.Interfejs;
 
-
 namespace STSAnaliza.Services;
-
-public interface ISportradarDailyMatchResolver
-{
-    Task<(string? PlayerAId, string? PlayerBId)> TryResolveCompetitorIdsAsync(
-        DateOnly date,
-        string playerAName,
-        string playerBName,
-        CancellationToken ct);
-}
 
 public sealed class SportradarDailyMatchResolver : ISportradarDailyMatchResolver
 {
