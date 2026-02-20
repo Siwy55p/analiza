@@ -26,7 +26,11 @@ public sealed class SportradarTennisClient : ISportradarTennisClient
     private static readonly TimeSpan TtlEventSummary = TimeSpan.FromHours(12);
     private static readonly TimeSpan TtlCompetitorSummary = TimeSpan.FromHours(12);
     private static readonly TimeSpan TtlRankings = TimeSpan.FromHours(12);
-    private static readonly TimeSpan TtlSchedule = TimeSpan.FromMinutes(2);
+
+    // ważne: schedule to endpoint dzienny – spokojnie może mieć dłuższy TTL niż 2 min,
+    // a i tak masz własny cache w DailyMatchResolver (15 min).
+    private static readonly TimeSpan TtlSchedule = TimeSpan.FromMinutes(10);
+
     private static readonly TimeSpan TtlVersus = TimeSpan.FromHours(12);
 
     public SportradarTennisClient(
@@ -67,42 +71,36 @@ public sealed class SportradarTennisClient : ISportradarTennisClient
         }).ConfigureAwait(false);
     }
 
-    // -------------------------
-    // Public API (ZGODNE z ISportradarTennisClient)
-    // -------------------------
+    private Task<string> GetJsonCachedAsync(string cacheKey, TimeSpan ttl, string relativePath, CancellationToken ct)
+        => GetCachedAsync(cacheKey, ttl, ct2 => GetStringAsync(relativePath, ct2), ct)!;
 
-    public Task<string> GetSportEventSummaryJsonAsync(string sportEventId, CancellationToken ct)
+    private static T DeserializeOrEmpty<T>(string json, Func<T> emptyFactory)
     {
-        var id = SportradarId.NormalizeRequired(sportEventId, nameof(sportEventId));
-        var path = $"sport_events/{id}/summary.json";
-
-        var cacheKey = $"{CachePrefix}:event-summary-json:{id}";
-        return GetCachedAsync(
-                cacheKey,
-                TtlEventSummary,
-                ct2 => GetStringAsync(path, ct2),
-                ct
-            )!;
+        try
+        {
+            var obj = JsonSerializer.Deserialize<T>(json, JsonOpt);
+            return obj ?? emptyFactory();
+        }
+        catch
+        {
+            return emptyFactory();
+        }
     }
 
-    public Task<RankingsResponseDto> GetRankingsAsync(CancellationToken ct)
-    {
-        var cacheKey = $"{CachePrefix}:rankings";
-        return GetCachedAsync(
-                cacheKey,
-                TtlRankings,
-                ct2 => GetAsync("rankings.json", ct2, () => new RankingsResponseDto(null, null)),
-                ct
-            )!;
-    }
+    // -------------------------
+    // Public API (ISportradarTennisClient)
+    // -------------------------
 
-    public Task<RankingsResponseDto> GetRaceRankingsAsync(CancellationToken ct)
+    public Task<CompetitorSummariesResponse> GetCompetitorSummariesAsync(string competitorId, CancellationToken ct)
     {
-        var cacheKey = $"{CachePrefix}:race-rankings";
+        var id = SportradarId.NormalizeRequired(competitorId, nameof(competitorId));
+        var path = $"competitors/{id}/summaries.json";
+
+        var cacheKey = $"{CachePrefix}:competitor-summaries:{id}";
         return GetCachedAsync(
                 cacheKey,
-                TtlRankings,
-                ct2 => GetAsync("race_rankings.json", ct2, () => new RankingsResponseDto(null, null)),
+                TtlCompetitorSummary,
+                ct2 => GetAsync(path, ct2, () => new CompetitorSummariesResponse()),
                 ct
             )!;
     }
@@ -110,21 +108,84 @@ public sealed class SportradarTennisClient : ISportradarTennisClient
     public Task<string> GetRankingsJsonAsync(CancellationToken ct)
     {
         var cacheKey = $"{CachePrefix}:rankings-json";
+        return GetJsonCachedAsync(cacheKey, TtlRankings, "rankings.json", ct);
+    }
+
+    // DTO z JSON (bez dodatkowego requestu)
+    public Task<RankingsResponseDto> GetRankingsAsync(CancellationToken ct)
+    {
+        var cacheKey = $"{CachePrefix}:rankings-dto";
         return GetCachedAsync(
                 cacheKey,
                 TtlRankings,
-                ct2 => GetStringAsync("rankings.json", ct2),
+                async ct2 =>
+                {
+                    var json = await GetRankingsJsonAsync(ct2).ConfigureAwait(false);
+                    return DeserializeOrEmpty(json, () => new RankingsResponseDto(null, null));
+                },
                 ct
             )!;
     }
 
-    public Task<string> GetRaceRankingsJsonAsync(CancellationToken ct)
+    // Race rankings: też robimy JSON -> DTO (żeby kiedyś łatwo współdzielić)
+    private Task<string> GetRaceRankingsJsonAsync(CancellationToken ct)
     {
         var cacheKey = $"{CachePrefix}:race-rankings-json";
+        return GetJsonCachedAsync(cacheKey, TtlRankings, "race_rankings.json", ct);
+    }
+
+    public Task<RankingsResponseDto> GetRaceRankingsAsync(CancellationToken ct)
+    {
+        var cacheKey = $"{CachePrefix}:race-rankings-dto";
         return GetCachedAsync(
                 cacheKey,
                 TtlRankings,
-                ct2 => GetStringAsync("race_rankings.json", ct2),
+                async ct2 =>
+                {
+                    var json = await GetRaceRankingsJsonAsync(ct2).ConfigureAwait(false);
+                    return DeserializeOrEmpty(json, () => new RankingsResponseDto(null, null));
+                },
+                ct
+            )!;
+    }
+
+    public Task<string> GetDailySummariesJsonAsync(DateOnly date, CancellationToken ct)
+    {
+        var dateStr = date.ToString("yyyy-MM-dd");
+        var path = $"schedules/{dateStr}/summaries.json";
+
+        var cacheKey = $"{CachePrefix}:schedule-json:{dateStr}";
+        return GetJsonCachedAsync(cacheKey, TtlSchedule, path, ct);
+    }
+
+    // DTO z JSON (bez drugiego requestu)
+    public Task<CompetitorSummariesResponse> GetDailySummariesAsync(DateOnly date, CancellationToken ct)
+    {
+        var dateStr = date.ToString("yyyy-MM-dd");
+        var cacheKey = $"{CachePrefix}:schedule-dto:{dateStr}";
+
+        return GetCachedAsync(
+                cacheKey,
+                TtlSchedule,
+                async ct2 =>
+                {
+                    var json = await GetDailySummariesJsonAsync(date, ct2).ConfigureAwait(false);
+                    return DeserializeOrEmpty(json, () => new CompetitorSummariesResponse());
+                },
+                ct
+            )!;
+    }
+
+    public Task<SeasonInfoDto> GetSeasonInfoAsync(string seasonId, CancellationToken ct)
+    {
+        var id = SportradarId.NormalizeRequired(seasonId, nameof(seasonId));
+        var path = $"seasons/{id}/info.json";
+
+        var cacheKey = $"{CachePrefix}:season-info:{id}";
+        return GetCachedAsync(
+                cacheKey,
+                TtlSeasonInfo,
+                ct2 => GetAsync(path, ct2, () => new SeasonInfoDto()),
                 ct
             )!;
     }
@@ -151,78 +212,35 @@ public sealed class SportradarTennisClient : ISportradarTennisClient
             )!;
     }
 
-    public Task<SportEventSummaryDto> GetSportEventSummaryAsync(string sportEventId, CancellationToken ct)
+    public Task<string> GetSportEventSummaryJsonAsync(string sportEventId, CancellationToken ct)
     {
         var id = SportradarId.NormalizeRequired(sportEventId, nameof(sportEventId));
         var path = $"sport_events/{id}/summary.json";
 
-        var cacheKey = $"{CachePrefix}:event-summary:{id}";
+        var cacheKey = $"{CachePrefix}:event-summary-json:{id}";
+        return GetJsonCachedAsync(cacheKey, TtlEventSummary, path, ct);
+    }
+
+    // DTO z JSON (bez drugiego requestu)
+    public Task<SportEventSummaryDto> GetSportEventSummaryAsync(string sportEventId, CancellationToken ct)
+    {
+        var id = SportradarId.NormalizeRequired(sportEventId, nameof(sportEventId));
+        var cacheKey = $"{CachePrefix}:event-summary-dto:{id}";
+
         return GetCachedAsync(
                 cacheKey,
                 TtlEventSummary,
-                ct2 => GetAsync(path, ct2, () => new SportEventSummaryDto()),
-                ct
-            )!;
-    }
-
-    public Task<CompetitorSummariesResponse> GetCompetitorSummariesAsync(string competitorId, CancellationToken ct)
-    {
-        var id = SportradarId.NormalizeRequired(competitorId, nameof(competitorId));
-        var path = $"competitors/{id}/summaries.json";
-
-        var cacheKey = $"{CachePrefix}:competitor-summaries:{id}";
-        return GetCachedAsync(
-                cacheKey,
-                TtlCompetitorSummary,
-                ct2 => GetAsync(path, ct2, () => new CompetitorSummariesResponse()),
-                ct
-            )!;
-    }
-
-    public Task<string> GetDailySummariesJsonAsync(DateOnly date, CancellationToken ct)
-    {
-        var dateStr = date.ToString("yyyy-MM-dd");
-        var path = $"schedules/{dateStr}/summaries.json";
-
-        var cacheKey = $"{CachePrefix}:schedule-json:{dateStr}";
-        return GetCachedAsync(
-                cacheKey,
-                TtlSchedule,
-                ct2 => GetStringAsync(path, ct2),
-                ct
-            )!;
-    }
-
-    public Task<CompetitorSummariesResponse> GetDailySummariesAsync(DateOnly date, CancellationToken ct)
-    {
-        var dateStr = date.ToString("yyyy-MM-dd");
-        var path = $"schedules/{dateStr}/summaries.json";
-
-        var cacheKey = $"{CachePrefix}:schedule:{dateStr}";
-        return GetCachedAsync(
-                cacheKey,
-                TtlSchedule,
-                ct2 => GetAsync(path, ct2, () => new CompetitorSummariesResponse()),
-                ct
-            )!;
-    }
-
-    public Task<SeasonInfoDto> GetSeasonInfoAsync(string seasonId, CancellationToken ct)
-    {
-        var id = SportradarId.NormalizeRequired(seasonId, nameof(seasonId));
-        var path = $"seasons/{id}/info.json";
-
-        var cacheKey = $"{CachePrefix}:season-info:{id}";
-        return GetCachedAsync(
-                cacheKey,
-                TtlSeasonInfo,
-                ct2 => GetAsync(path, ct2, () => new SeasonInfoDto()),
+                async ct2 =>
+                {
+                    var json = await GetSportEventSummaryJsonAsync(id, ct2).ConfigureAwait(false);
+                    return DeserializeOrEmpty(json, () => new SportEventSummaryDto());
+                },
                 ct
             )!;
     }
 
     // -------------------------
-    // Private helpers
+    // Private helpers (HTTP)
     // -------------------------
 
     private string BuildUrl(string relativePath)
@@ -245,7 +263,7 @@ public sealed class SportradarTennisClient : ISportradarTennisClient
 
         var url = BuildUrl(relativePath);
 
-        // ✅ NIE robimy retry 429 tutaj — to robi SportradarThrottlingHandler
+        // retry 429 robi SportradarThrottlingHandler
         using var req = CreateGetRequest(url);
         using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
 
@@ -258,7 +276,6 @@ public sealed class SportradarTennisClient : ISportradarTennisClient
 
         var url = BuildUrl(relativePath);
 
-        // ✅ NIE robimy retry 429 tutaj — to robi SportradarThrottlingHandler
         using var req = CreateGetRequest(url);
         using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
 

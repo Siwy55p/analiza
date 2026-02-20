@@ -49,6 +49,8 @@ public sealed partial class TennisApiService : ITennisApiService
     private readonly ConcurrentDictionary<string, (DateTimeOffset FetchedAtUtc, string Text)> _h2hCache
         = new(StringComparer.OrdinalIgnoreCase);
 
+    private const int MaxClosedMatchesToParse = 80;
+
     public TennisApiService(
         ISportradarTennisClient client,
         ICompetitorIdResolver resolver,
@@ -199,9 +201,9 @@ public sealed partial class TennisApiService : ITennisApiService
     }
 
     private async Task<List<PlayerMatchSummary>> ParseClosedSinglesMatchesAsync(
-        CompetitorSummariesResponse dto,
-        string competitorId,
-        CancellationToken ct)
+    CompetitorSummariesResponse dto,
+    string competitorId,
+    CancellationToken ct)
     {
         var items = dto.Summaries ?? new List<SummaryItem>();
 
@@ -209,23 +211,10 @@ public sealed partial class TennisApiService : ITennisApiService
             .Where(x => IsFinishedStatus(x.SportEventStatus?.Status))
             .Where(x => x.SportEvent?.StartTime != null)
             .OrderByDescending(x => x.SportEvent!.StartTime!.Value)
-            .ToList();
-
-        // Prefetch season surfaces (żeby nie awaitować w pętli)
-        var seasonIds = closed
-            .Select(x => (x.SportEventContext ?? x.SportEvent?.SportEventContext)?.Season?.Id)
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .Select(id => NormalizeId(id))
-            .Where(id => id.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(MaxClosedMatchesToParse) // ✅ limit = mniej sezonów = mniej requestów
             .ToList();
 
         var seasonSurfaceMap = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        foreach (var sid in seasonIds)
-        {
-            ct.ThrowIfCancellationRequested();
-            seasonSurfaceMap[sid] = await GetSeasonSurfaceCachedAsync(sid, ct); // np "hardcourt_outdoor"
-        }
 
         var result = new List<PlayerMatchSummary>(capacity: closed.Count);
         int brakCount = 0;
@@ -258,29 +247,28 @@ public sealed partial class TennisApiService : ITennisApiService
 
             var ctx = s.SportEventContext ?? ev.SportEventContext;
 
-            // A) ctx surface (czasem null)
+            // A) ctx surface (jeśli jest)
             var ctxSurfaceRaw = ctx?.SportEventConditions?.Surface?.Name;
             var surface = NormalizeSurface(ctxSurfaceRaw);
 
-            // B) fallback: season.info.surface
+            // B) fallback: season.info.surface — tylko jeśli surface brak (lazy)
             if (surface == "brak")
             {
                 var sid = NormalizeId(ctx?.Season?.Id);
-                if (sid.Length > 0 && seasonSurfaceMap.TryGetValue(sid, out var seasonSurfaceRaw))
+                if (sid.Length > 0)
                 {
+                    if (!seasonSurfaceMap.TryGetValue(sid, out var seasonSurfaceRaw))
+                    {
+                        seasonSurfaceRaw = await GetSeasonSurfaceCachedAsync(sid, ct);
+                        seasonSurfaceMap[sid] = seasonSurfaceRaw;
+                    }
+
                     surface = NormalizeSurface(seasonSurfaceRaw);
                 }
             }
 
             if (surface == "brak")
-            {
                 brakCount++;
-                _logger.LogInformation(
-                    "Surface=brak EV={EventId} ctxSurface={CtxSurface} seasonId={SeasonId}",
-                    ev.Id ?? "null",
-                    ctxSurfaceRaw ?? "null",
-                    NormalizeId(ctx?.Season?.Id) is { Length: > 0 } x ? x : "null");
-            }
 
             result.Add(new PlayerMatchSummary(
                 StartTimeUtc: ev.StartTime.Value,
