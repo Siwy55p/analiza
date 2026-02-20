@@ -19,20 +19,10 @@ public sealed partial class TennisApiService : ITennisApiService
     // -------------------------
     private static readonly TimeSpan RankingsTtl = TimeSpan.FromHours(12);
     private static readonly TimeSpan RecentCacheTtl = TimeSpan.FromMinutes(30);
-    private static readonly TimeSpan SeasonSurfaceTtl = TimeSpan.FromHours(24);
-    private static readonly TimeSpan EventSummaryTtl = TimeSpan.FromHours(6);
     private static readonly TimeSpan H2HCacheTtl = TimeSpan.FromHours(6);
-
-    // cache: seasonId -> season.info.surface (np. "hardcourt_outdoor")
-    private readonly ConcurrentDictionary<string, (DateTimeOffset FetchedAtUtc, string? Surface)> _seasonSurfaceCache
-        = new(StringComparer.OrdinalIgnoreCase);
 
     // cache: competitorId -> full closed matches (posortowane malejąco)
     private readonly ConcurrentDictionary<string, (DateTimeOffset FetchedAtUtc, IReadOnlyList<PlayerMatchSummary> Matches)> _recentCache
-        = new(StringComparer.OrdinalIgnoreCase);
-
-    // cache: sportEventId -> raw json (do szybkiej ekstrakcji statów)
-    private readonly ConcurrentDictionary<string, (DateTimeOffset FetchedAtUtc, string Json)> _eventSummaryJsonCache
         = new(StringComparer.OrdinalIgnoreCase);
 
     // rank caches
@@ -84,52 +74,35 @@ public sealed partial class TennisApiService : ITennisApiService
     }
 
     // -------------------------
-    // Season surface (cache)
+    // Season surface (cache handled in SportradarTennisClient via IMemoryCache)
     // -------------------------
     private async Task<string?> GetSeasonSurfaceCachedAsync(string seasonId, CancellationToken ct)
     {
         var sid = NormalizeId(seasonId);
         if (sid.Length == 0) return null;
 
-        var now = DateTimeOffset.UtcNow;
-
-        if (_seasonSurfaceCache.TryGetValue(sid, out var hit) &&
-            (now - hit.FetchedAtUtc) < SeasonSurfaceTtl)
-            return hit.Surface;
-
         try
         {
             var dto = await _client.GetSeasonInfoAsync(sid, ct);
-            var surface = dto.Season?.Info?.Surface;
-
-            _seasonSurfaceCache[sid] = (now, surface);
-            return surface;
+            return dto.Season?.Info?.Surface;
         }
         catch (Exception ex)
         {
-            _seasonSurfaceCache[sid] = (now, null);
             _logger.LogWarning(ex, "Nie udało się pobrać SeasonInfo dla {SeasonId}", sid);
             return null;
         }
     }
 
     // -------------------------
-    // Event summary JSON (cache)
+    // Event summary JSON (cache handled in SportradarTennisClient via IMemoryCache)
     // -------------------------
     private async Task<string?> GetEventSummaryJsonCachedAsync(string sportEventId, CancellationToken ct)
     {
         var eid = NormalizeId(sportEventId);
         if (eid.Length == 0) return null;
 
-        if (_eventSummaryJsonCache.TryGetValue(eid, out var cached) &&
-            (DateTimeOffset.UtcNow - cached.FetchedAtUtc) < EventSummaryTtl)
-        {
-            return cached.Json;
-        }
-
-        var json = await _client.GetSportEventSummaryJsonAsync(eid, ct);
-        _eventSummaryJsonCache[eid] = (DateTimeOffset.UtcNow, json);
-        return json;
+        // Jeśli request się nie uda -> wyjątek poleci do góry (obsługa w warstwie wyżej).
+        return await _client.GetSportEventSummaryJsonAsync(eid, ct);
     }
 
     // -------------------------

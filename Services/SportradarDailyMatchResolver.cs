@@ -1,20 +1,12 @@
-﻿using System.Collections.Concurrent;
-using System.Text.Json;
-using STSAnaliza.Interfejs;
+﻿using STSAnaliza.Interfejs;
+using STSAnaliza.Services.SportradarDtos;
+using System.Collections.Generic;
 
 namespace STSAnaliza.Services;
 
 public sealed class SportradarDailyMatchResolver : ISportradarDailyMatchResolver
 {
     private readonly ISportradarTennisClient _client;
-
-    // Cache per dzień, ale z TTL + sprzątaniem (żeby nie rósł w nieskończoność)
-    private sealed record CacheEntry(DateTimeOffset FetchedAtUtc, string Json);
-
-    private static readonly TimeSpan DailyCacheTtl = TimeSpan.FromMinutes(15);
-    private const int KeepDays = 14;
-
-    private readonly ConcurrentDictionary<DateOnly, CacheEntry> _dailyCache = new();
 
     public SportradarDailyMatchResolver(ISportradarTennisClient client)
     {
@@ -30,57 +22,46 @@ public sealed class SportradarDailyMatchResolver : ISportradarDailyMatchResolver
         if (string.IsNullOrWhiteSpace(playerAName) || string.IsNullOrWhiteSpace(playerBName))
             return (null, null);
 
-        var json = await GetDailyJsonCachedAsync(date, ct);
-
         var aTokens = SportradarName.Tokens(playerAName);
         var bTokens = SportradarName.Tokens(playerBName);
 
-        using var doc = JsonDocument.Parse(json);
+        // ✅ cache surowego JSON / DTO jest w SportradarTennisClient (IMemoryCache)
+        var daily = await _client.GetDailySummariesAsync(date, ct);
 
-        if (!doc.RootElement.TryGetProperty("summaries", out var summaries) ||
-            summaries.ValueKind != JsonValueKind.Array)
-            return (null, null);
-
-        foreach (var summary in summaries.EnumerateArray())
+        foreach (var summary in daily.Summaries ?? new List<SummaryItem>())
         {
-            if (!summary.TryGetProperty("sport_event", out var se) || se.ValueKind != JsonValueKind.Object)
+            ct.ThrowIfCancellationRequested();
+
+            var ev = summary.SportEvent;
+            if (ev is null) continue;
+
+            // Preferuj kontekst z summary, fallback do tego w sport_event
+            var ctx = summary.SportEventContext ?? ev.SportEventContext;
+            var type = ctx?.Competition?.Type;
+
+            // STS lista to single -> filtrujemy doubles, żeby nie złapać par
+            if (!string.IsNullOrWhiteSpace(type) &&
+                !string.Equals(type, "singles", StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            if (!se.TryGetProperty("competitors", out var comps) || comps.ValueKind != JsonValueKind.Array)
-                continue;
+            var comps = ev.Competitors;
+            if (comps is null || comps.Count != 2) continue;
 
-            // zbierz competitorów
-            var list = new List<(string? Id, string? Name)>();
-            foreach (var c in comps.EnumerateArray())
-            {
-                if (c.ValueKind != JsonValueKind.Object) continue;
-
-                c.TryGetProperty("id", out var idEl);
-                c.TryGetProperty("name", out var nameEl);
-
-                var id = idEl.ValueKind == JsonValueKind.String ? idEl.GetString() : null;
-                var name = nameEl.ValueKind == JsonValueKind.String ? nameEl.GetString() : null;
-
-                list.Add((id, name));
-            }
-
-            if (list.Count < 2) continue;
-
-            // dopasuj po tokenach (ignoruje kolejność imię/nazwisko)
             string? aId = null;
             string? bId = null;
 
-            foreach (var (id, name) in list)
+            foreach (var c in comps)
             {
-                if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(name)) continue;
+                if (string.IsNullOrWhiteSpace(c?.Id) || string.IsNullOrWhiteSpace(c.Name))
+                    continue;
 
-                var t = SportradarName.Tokens(name);
+                var t = SportradarName.Tokens(c.Name);
 
                 if (aId is null && IsSubset(aTokens, t))
-                    aId = id;
+                    aId = c.Id;
 
                 if (bId is null && IsSubset(bTokens, t))
-                    bId = id;
+                    bId = c.Id;
             }
 
             if (aId is not null && bId is not null)
@@ -88,35 +69,6 @@ public sealed class SportradarDailyMatchResolver : ISportradarDailyMatchResolver
         }
 
         return (null, null);
-    }
-
-    private async Task<string> GetDailyJsonCachedAsync(DateOnly date, CancellationToken ct)
-    {
-        var now = DateTimeOffset.UtcNow;
-
-        if (_dailyCache.TryGetValue(date, out var entry))
-        {
-            if ((now - entry.FetchedAtUtc) < DailyCacheTtl && !string.IsNullOrWhiteSpace(entry.Json))
-                return entry.Json;
-        }
-
-        var json = await _client.GetDailySummariesJsonAsync(date, ct);
-        _dailyCache[date] = new CacheEntry(now, json);
-
-        Prune(now);
-        return json;
-    }
-
-    private void Prune(DateTimeOffset now)
-    {
-        var today = DateOnly.FromDateTime(now.UtcDateTime);
-        var minDate = today.AddDays(-KeepDays);
-
-        foreach (var kv in _dailyCache)
-        {
-            if (kv.Key < minDate)
-                _dailyCache.TryRemove(kv.Key, out _);
-        }
     }
 
     private static bool IsSubset(HashSet<string> need, HashSet<string> have)
