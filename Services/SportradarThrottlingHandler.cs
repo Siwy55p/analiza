@@ -1,7 +1,10 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Threading;
+using STSAnaliza.Options;
 
 namespace STSAnaliza.Services;
 
@@ -22,6 +25,19 @@ public sealed class SportradarThrottlingHandler : DelegatingHandler
     private DateTime _lastRefillUtc;
 
     private static readonly ThreadLocal<Random> _rng = new(() => new Random());
+
+    // -------------------------
+    // Minimal request metrics (debug / sanity check)
+    // -------------------------
+    private sealed class Counter { public long Value; }
+
+    private long _totalRequests;
+    private long _total429;
+    private long _totalElapsedMs;
+    private readonly ConcurrentDictionary<string, Counter> _byEndpoint = new(StringComparer.OrdinalIgnoreCase);
+
+    // log co N requestów (żeby nie spamować)
+    private const int LogEveryNRequests = 100;
 
     public SportradarThrottlingHandler(
         IOptions<SportradarClientOptions> opt,
@@ -72,6 +88,7 @@ public sealed class SportradarThrottlingHandler : DelegatingHandler
                 await AcquireTokenAsync(ct).ConfigureAwait(false);
 
                 HttpResponseMessage resp;
+                var swStart = Stopwatch.GetTimestamp();
 
                 if (attempt == 0)
                 {
@@ -82,6 +99,8 @@ public sealed class SportradarThrottlingHandler : DelegatingHandler
                     using var clone = original.CloneShallow();
                     resp = await base.SendAsync(clone, ct).ConfigureAwait(false);
                 }
+
+                TrackMetrics(original, resp, attempt, swStart);
 
                 if (resp.StatusCode != (HttpStatusCode)429)
                     return resp;
@@ -107,6 +126,103 @@ public sealed class SportradarThrottlingHandler : DelegatingHandler
 
             Interlocked.Decrement(ref _pending);
         }
+    }
+
+    private void TrackMetrics(HttpRequestMessage original, HttpResponseMessage resp, int attempt, long swStart)
+    {
+        var elapsedMs = Stopwatch.GetElapsedTime(swStart).TotalMilliseconds;
+
+        var total = Interlocked.Increment(ref _totalRequests);
+        Interlocked.Add(ref _totalElapsedMs, (long)elapsedMs);
+
+        if (resp.StatusCode == (HttpStatusCode)429)
+            Interlocked.Increment(ref _total429);
+
+        var endpoint = NormalizeEndpoint(original.RequestUri);
+        var counter = _byEndpoint.GetOrAdd(endpoint, _ => new Counter());
+        Interlocked.Increment(ref counter.Value);
+
+        // INFO co N requestów: szybki sanity check "czy nie poleciało za dużo"
+        if (total % LogEveryNRequests == 0)
+        {
+            var avg = total > 0 ? (double)Interlocked.Read(ref _totalElapsedMs) / total : 0d;
+
+            var top = _byEndpoint
+                .Select(kv => (Endpoint: kv.Key, Count: Interlocked.Read(ref kv.Value.Value)))
+                .OrderByDescending(x => x.Count)
+                .Take(5)
+                .Select(x => $"{x.Endpoint}={x.Count}")
+                .ToArray();
+
+            _logger.LogInformation(
+                "Sportradar stats: total={Total}, 429={Total429}, avgMs={AvgMs:0.0}, pending={Pending}, top=[{Top}]",
+                total,
+                Interlocked.Read(ref _total429),
+                avg,
+                Volatile.Read(ref _pending),
+                string.Join(", ", top));
+        }
+
+        // retry -> tylko DEBUG (żeby nie mieszać w normalnych logach)
+        if (attempt > 0)
+        {
+            _logger.LogDebug(
+                "Sportradar retry attempt={Attempt} status={Status} endpoint={Endpoint} elapsedMs={Elapsed:0.0}",
+                attempt,
+                (int)resp.StatusCode,
+                endpoint,
+                elapsedMs);
+        }
+    }
+
+    private static string NormalizeEndpoint(Uri? uri)
+    {
+        if (uri is null) return "(null)";
+
+        // /tennis/{access}/v3/{locale}/{relativePath}
+        var path = uri.AbsolutePath ?? string.Empty;
+        var idx = path.IndexOf("/v3/", StringComparison.OrdinalIgnoreCase);
+        if (idx >= 0)
+        {
+            var rest = path[(idx + 4)..]; // {locale}/{relativePath}
+            var slash = rest.IndexOf('/');
+            if (slash >= 0 && slash + 1 < rest.Length)
+                rest = rest[(slash + 1)..];
+
+            return NormalizeRelative(rest);
+        }
+
+        return NormalizeRelative(path.Trim('/'));
+    }
+
+    private static string NormalizeRelative(string relative)
+    {
+        if (string.IsNullOrWhiteSpace(relative))
+            return "(empty)";
+
+        var parts = relative.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < parts.Length; i++)
+        {
+            var p = parts[i];
+
+            // schedules/2026-02-20/summaries.json
+            if (p.Length == 10 && p[4] == '-' && p[7] == '-' &&
+                char.IsDigit(p[0]) && char.IsDigit(p[1]) && char.IsDigit(p[2]) && char.IsDigit(p[3]))
+            {
+                parts[i] = "{date}";
+                continue;
+            }
+
+            // sr:... albo zakodowane sr%3a...
+            if (p.Contains("sr:", StringComparison.OrdinalIgnoreCase) ||
+                p.Contains("sr%3a", StringComparison.OrdinalIgnoreCase))
+            {
+                parts[i] = "{id}";
+                continue;
+            }
+        }
+
+        return string.Join('/', parts);
     }
 
     private async Task AcquireTokenAsync(CancellationToken ct)
