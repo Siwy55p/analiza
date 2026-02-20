@@ -1,16 +1,18 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Collections.Concurrent;
+using STSAnaliza.Interfejs;
+using STSAnaliza.Options;
 using System.Diagnostics;
 using System.Net;
 using System.Threading;
-using STSAnaliza.Options;
 
 namespace STSAnaliza.Services;
 
 public sealed class SportradarThrottlingHandler : DelegatingHandler
 {
     private readonly ILogger<SportradarThrottlingHandler> _logger;
+    private readonly ISportradarRequestMeter _meter;
+
     private readonly SemaphoreSlim _concurrency;
     private readonly int _max429Retries;
 
@@ -26,24 +28,17 @@ public sealed class SportradarThrottlingHandler : DelegatingHandler
 
     private static readonly ThreadLocal<Random> _rng = new(() => new Random());
 
-    // -------------------------
-    // Minimal request metrics (debug / sanity check)
-    // -------------------------
-    private sealed class Counter { public long Value; }
-
-    private long _totalRequests;
-    private long _total429;
-    private long _totalElapsedMs;
-    private readonly ConcurrentDictionary<string, Counter> _byEndpoint = new(StringComparer.OrdinalIgnoreCase);
-
     // log co N requestów (żeby nie spamować)
     private const int LogEveryNRequests = 100;
+    private long _logCounter;
 
     public SportradarThrottlingHandler(
         IOptions<SportradarClientOptions> opt,
-        ILogger<SportradarThrottlingHandler> logger)
+        ILogger<SportradarThrottlingHandler> logger,
+        ISportradarRequestMeter meter)
     {
         _logger = logger;
+        _meter = meter;
 
         var o = opt.Value;
 
@@ -100,7 +95,7 @@ public sealed class SportradarThrottlingHandler : DelegatingHandler
                     resp = await base.SendAsync(clone, ct).ConfigureAwait(false);
                 }
 
-                TrackMetrics(original, resp, attempt, swStart);
+                Track(original, resp, attempt, swStart);
 
                 if (resp.StatusCode != (HttpStatusCode)429)
                     return resp;
@@ -128,51 +123,49 @@ public sealed class SportradarThrottlingHandler : DelegatingHandler
         }
     }
 
-    private void TrackMetrics(HttpRequestMessage original, HttpResponseMessage resp, int attempt, long swStart)
+    private void Track(HttpRequestMessage original, HttpResponseMessage resp, int attempt, long swStart)
     {
-        var elapsedMs = Stopwatch.GetElapsedTime(swStart).TotalMilliseconds;
-
-        var total = Interlocked.Increment(ref _totalRequests);
-        Interlocked.Add(ref _totalElapsedMs, (long)elapsedMs);
-
-        if (resp.StatusCode == (HttpStatusCode)429)
-            Interlocked.Increment(ref _total429);
-
+        var elapsedMs = (long)Stopwatch.GetElapsedTime(swStart).TotalMilliseconds;
         var endpoint = NormalizeEndpoint(original.RequestUri);
-        var counter = _byEndpoint.GetOrAdd(endpoint, _ => new Counter());
-        Interlocked.Increment(ref counter.Value);
 
-        // INFO co N requestów: szybki sanity check "czy nie poleciało za dużo"
-        if (total % LogEveryNRequests == 0)
-        {
-            var avg = total > 0 ? (double)Interlocked.Read(ref _totalElapsedMs) / total : 0d;
+        _meter.Track(endpoint, (int)resp.StatusCode, elapsedMs);
 
-            var top = _byEndpoint
-                .Select(kv => (Endpoint: kv.Key, Count: Interlocked.Read(ref kv.Value.Value)))
-                .OrderByDescending(x => x.Count)
-                .Take(5)
-                .Select(x => $"{x.Endpoint}={x.Count}")
-                .ToArray();
-
-            _logger.LogInformation(
-                "Sportradar stats: total={Total}, 429={Total429}, avgMs={AvgMs:0.0}, pending={Pending}, top=[{Top}]",
-                total,
-                Interlocked.Read(ref _total429),
-                avg,
-                Volatile.Read(ref _pending),
-                string.Join(", ", top));
-        }
-
-        // retry -> tylko DEBUG (żeby nie mieszać w normalnych logach)
+        // retry -> tylko DEBUG
         if (attempt > 0)
         {
             _logger.LogDebug(
-                "Sportradar retry attempt={Attempt} status={Status} endpoint={Endpoint} elapsedMs={Elapsed:0.0}",
+                "Sportradar retry attempt={Attempt} status={Status} endpoint={Endpoint} elapsedMs={ElapsedMs}",
                 attempt,
                 (int)resp.StatusCode,
                 endpoint,
                 elapsedMs);
         }
+
+        // INFO co N requestów: szybki sanity check "czy nie poleciało za dużo"
+        if (!_logger.IsEnabled(LogLevel.Information))
+            return;
+
+        var count = Interlocked.Increment(ref _logCounter);
+        if (count % LogEveryNRequests != 0)
+            return;
+
+        var snap = _meter.Snapshot();
+        var avg = snap.TotalRequests > 0 ? (double)snap.TotalElapsedMs / snap.TotalRequests : 0d;
+
+        var top = snap.ByEndpoint
+            .Select(kv => (Endpoint: kv.Key, Count: kv.Value))
+            .OrderByDescending(x => x.Count)
+            .Take(5)
+            .Select(x => $"{x.Endpoint}={x.Count}")
+            .ToArray();
+
+        _logger.LogInformation(
+            "Sportradar stats: total={Total}, 429={Total429}, avgMs={AvgMs:0.0}, pending={Pending}, top=[{Top}]",
+            snap.TotalRequests,
+            snap.Total429,
+            avg,
+            Volatile.Read(ref _pending),
+            string.Join(", ", top));
     }
 
     private static string NormalizeEndpoint(Uri? uri)

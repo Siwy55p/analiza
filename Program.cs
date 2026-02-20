@@ -91,6 +91,10 @@ Podsumowanie: [DO UZUPEŁNIENIA]";
                 var srFallbackSection = ctx.Configuration.GetSection("Sportradar");
                 services.Configure<SportradarClientOptions>(srClientSection.Exists() ? srClientSection : srFallbackSection);
 
+                // metryki requestów do Sportradar (global + delta per mecz)
+                services.AddSingleton<ISportradarRequestMeter, SportradarRequestMeter>();
+
+
                 services.AddTransient<SportradarThrottlingHandler>();
 
                 services.AddHttpClient<ISportradarTennisClient, SportradarTennisClient>(client =>
