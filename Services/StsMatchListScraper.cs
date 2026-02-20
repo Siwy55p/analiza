@@ -197,36 +197,71 @@ namespace STSAnaliza.Services
             {
                 ct.ThrowIfCancellationRequested();
 
-                // Spróbuj znaleźć przycisk "Wyświetl kolejne" (STS ma różne klasy, ale tekst zwykle stały)
-                var showMore = page.Locator("button:has-text(\"Wyświetl kolejne\")");
-                if (await showMore.CountAsync() == 0)
+                // STS ma różne warianty DOM, ale tekst zwykle stały
+                var showMoreAll = page.Locator("button:has-text(\"Wyświetl kolejne\")");
+                if (await showMoreAll.CountAsync() == 0)
                     break;
 
-                // Scroll pod przycisk (czasem bez tego nie klika)
-                await showMore.First.ScrollIntoViewIfNeededAsync();
-                await page.WaitForTimeoutAsync(150);
+                var btn = showMoreAll.First;
 
-                // Klik i poczekaj aż przybędzie kafelków (albo choć DOM się uspokoi)
-                await showMore.First.ClickAsync(new() { Timeout = 5000 });
+                // Klik bez ręcznego scroll (Playwright sam scrolluje). Retry na re-render/detach.
+                await SafeClickAsync(btn, ct);
 
-                // Czekamy aż liczba kafelków wzrośnie albo timeout
-                bool grown = false;
-                for (int t = 0; t < 20; t++)
+                // Poczekaj aż liczba kafelków wzrośnie (albo jeśli nie wzrośnie - kończ)
+                var grown = await WaitForTilesToGrowAsync(page, lastCount, ct, timeoutMs: 7000);
+                if (!grown)
+                    break;
+
+                lastCount = await tiles.CountAsync();
+            }
+        }
+
+        private static async Task SafeClickAsync(ILocator locator, CancellationToken ct, int attempts = 5)
+        {
+            for (int i = 1; i <= attempts; i++)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                try
                 {
-                    ct.ThrowIfCancellationRequested();
-                    await page.WaitForTimeoutAsync(250);
-
-                    int count = await tiles.CountAsync();
-                    if (count > lastCount)
-                    {
-                        lastCount = count;
-                        grown = true;
-                        break;
-                    }
+                    await locator.WaitForAsync(new() { State = WaitForSelectorState.Visible, Timeout = 5000 });
+                    await locator.ClickAsync(new() { Timeout = 5000 });
+                    return;
                 }
+                catch (PlaywrightException ex) when (IsDetachedDom(ex) && i < attempts)
+                {
+                    // STS re-renderuje -> element znika z DOM, chwilka i próbujemy ponownie
+                    await Task.Delay(150 * i, ct);
+                }
+            }
 
-                // jeśli nie rośnie — nie ma sensu dalej klikać
-                if (!grown) break;
+            // ostatnia próba - jak dalej nie działa, poleci wyjątek z Click/WaitFor
+            await locator.ClickAsync(new() { Timeout = 5000 });
+        }
+
+        private static bool IsDetachedDom(PlaywrightException ex)
+        {
+            var msg = ex.Message ?? "";
+            return msg.Contains("not attached to the DOM", StringComparison.OrdinalIgnoreCase) ||
+                   msg.Contains("Element is not attached", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static async Task<bool> WaitForTilesToGrowAsync(IPage page, int prevCount, CancellationToken ct, int timeoutMs)
+        {
+            try
+            {
+                // jeśli urośnie liczba kafelków -> OK
+                await page.WaitForFunctionAsync(
+                    "(prev) => document.querySelectorAll('bo-one-ticket-match-tile').length > prev",
+                    prevCount,
+                    new() { Timeout = timeoutMs }
+                );
+                return true;
+            }
+            catch (PlaywrightException)
+            {
+                // timeout / brak wzrostu
+                return false;
             }
         }
 

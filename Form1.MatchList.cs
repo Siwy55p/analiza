@@ -1,4 +1,4 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using STSAnaliza.Models;
 
 namespace STSAnaliza;
@@ -7,9 +7,23 @@ public partial class Form1
 {
     private async void btnDownloadList_Click(object sender, EventArgs e)
     {
-        _listMatches = await _listScraper.ExtractMatchListAsync();
-        txtListOutput.Text = Services.StsMatchListScraper.RenderForUi(_listMatches);
-        dataGridMatchList.DataSource = _listMatches;
+        btnDownloadList.Enabled = false;
+
+        try
+        {
+            _listMatches = await _listScraper.ExtractMatchListAsync();
+            txtListOutput.Text = Services.StsMatchListScraper.RenderForUi(_listMatches);
+            dataGridMatchList.DataSource = _listMatches;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Błąd pobierania listy: {ex.Message}", "Błąd",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            btnDownloadList.Enabled = true;
+        }
     }
 
     private void button4_Click(object sender, EventArgs e)
