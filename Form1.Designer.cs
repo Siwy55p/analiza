@@ -226,7 +226,6 @@
             panel3.Padding = new Padding(10);
             panel3.Size = new Size(1240, 748);
             panel3.TabIndex = 0;
-            panel3.Paint += panel3_Paint;
             // 
             // tableLayoutPanel1
             // 

@@ -16,8 +16,13 @@ public sealed class SportradarDailyMatchResolver : ISportradarDailyMatchResolver
 {
     private readonly ISportradarTennisClient _client;
 
-    // cache per dzień (żeby nie walić schedules X razy w tej samej analizie)
-    private readonly ConcurrentDictionary<DateOnly, string> _dailyCache = new();
+    // Cache per dzień, ale z TTL + sprzątaniem (żeby nie rósł w nieskończoność)
+    private sealed record CacheEntry(DateTimeOffset FetchedAtUtc, string Json);
+
+    private static readonly TimeSpan DailyCacheTtl = TimeSpan.FromMinutes(15);
+    private const int KeepDays = 14;
+
+    private readonly ConcurrentDictionary<DateOnly, CacheEntry> _dailyCache = new();
 
     public SportradarDailyMatchResolver(ISportradarTennisClient client)
     {
@@ -95,12 +100,31 @@ public sealed class SportradarDailyMatchResolver : ISportradarDailyMatchResolver
 
     private async Task<string> GetDailyJsonCachedAsync(DateOnly date, CancellationToken ct)
     {
-        if (_dailyCache.TryGetValue(date, out var cached))
-            return cached;
+        var now = DateTimeOffset.UtcNow;
+
+        if (_dailyCache.TryGetValue(date, out var entry))
+        {
+            if ((now - entry.FetchedAtUtc) < DailyCacheTtl && !string.IsNullOrWhiteSpace(entry.Json))
+                return entry.Json;
+        }
 
         var json = await _client.GetDailySummariesJsonAsync(date, ct);
-        _dailyCache.TryAdd(date, json);
+        _dailyCache[date] = new CacheEntry(now, json);
+
+        Prune(now);
         return json;
+    }
+
+    private void Prune(DateTimeOffset now)
+    {
+        var today = DateOnly.FromDateTime(now.UtcDateTime);
+        var minDate = today.AddDays(-KeepDays);
+
+        foreach (var kv in _dailyCache)
+        {
+            if (kv.Key < minDate)
+                _dailyCache.TryRemove(kv.Key, out _);
+        }
     }
 
     private static bool IsSubset(HashSet<string> need, HashSet<string> have)

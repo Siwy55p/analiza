@@ -1,6 +1,7 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Net;
+using System.Threading;
 
 namespace STSAnaliza.Services;
 
@@ -10,14 +11,16 @@ public sealed class SportradarThrottlingHandler : DelegatingHandler
     private readonly SemaphoreSlim _concurrency;
     private readonly int _max429Retries;
 
-    // Token bucket (bez System.Threading.RateLimiting)
+    private readonly int _queueLimit;
+    private int _pending; // queued + in-flight
+
+    // Token bucket
     private readonly object _tbLock = new();
     private readonly double _rps;
     private readonly double _burst;
     private double _tokens;
     private DateTime _lastRefillUtc;
 
-    // jitter per wątek
     private static readonly ThreadLocal<Random> _rng = new(() => new Random());
 
     public SportradarThrottlingHandler(
@@ -33,6 +36,8 @@ public sealed class SportradarThrottlingHandler : DelegatingHandler
         var maxConc = Math.Max(1, o.MaxConcurrency);
         _concurrency = new SemaphoreSlim(maxConc, maxConc);
 
+        _queueLimit = Math.Max(10, o.QueueLimit);
+
         _rps = Math.Max(0.1, o.RequestsPerSecond);
         _burst = Math.Max(1, o.Burst);
 
@@ -42,21 +47,41 @@ public sealed class SportradarThrottlingHandler : DelegatingHandler
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
-        await _concurrency.WaitAsync(ct).ConfigureAwait(false);
+        if (Interlocked.Increment(ref _pending) > _queueLimit)
+        {
+            Interlocked.Decrement(ref _pending);
+            throw new InvalidOperationException(
+                $"Sportradar queue limit exceeded ({_queueLimit}). Zmniejsz analizę równoległą albo zwiększ Sportradar:Client:QueueLimit.");
+        }
+
+        var acquired = false;
+
         try
         {
-            var original = request;
-            // bezpiecznie retry tylko dla zapytań bez body (Sportradar to praktycznie zawsze GET)
+            await _concurrency.WaitAsync(ct).ConfigureAwait(false);
+            acquired = true;
+
+            // retry tylko dla zapytań bez body (Sportradar: GET/HEAD)
             if (request.Method != HttpMethod.Get && request.Method != HttpMethod.Head)
-            {
                 return await base.SendAsync(request, ct).ConfigureAwait(false);
-            }
+
+            var original = request;
+
             for (int attempt = 0; ; attempt++)
             {
                 await AcquireTokenAsync(ct).ConfigureAwait(false);
 
-                var reqToSend = attempt == 0 ? original : original.CloneShallow();
-                var resp = await base.SendAsync(reqToSend, ct).ConfigureAwait(false);
+                HttpResponseMessage resp;
+
+                if (attempt == 0)
+                {
+                    resp = await base.SendAsync(original, ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    using var clone = original.CloneShallow();
+                    resp = await base.SendAsync(clone, ct).ConfigureAwait(false);
+                }
 
                 if (resp.StatusCode != (HttpStatusCode)429)
                     return resp;
@@ -69,7 +94,7 @@ public sealed class SportradarThrottlingHandler : DelegatingHandler
                 var delay = retryAfter + TimeSpan.FromMilliseconds(jitterMs);
 
                 _logger.LogWarning("Sportradar 429. Retry after {Delay}. Url: {Url}",
-                    delay, reqToSend.RequestUri);
+                    delay, original.RequestUri);
 
                 resp.Dispose();
                 await Task.Delay(delay, ct).ConfigureAwait(false);
@@ -77,7 +102,10 @@ public sealed class SportradarThrottlingHandler : DelegatingHandler
         }
         finally
         {
-            _concurrency.Release();
+            if (acquired)
+                _concurrency.Release();
+
+            Interlocked.Decrement(ref _pending);
         }
     }
 
