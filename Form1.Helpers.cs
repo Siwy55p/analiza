@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace STSAnaliza;
 
 public partial class Form1
@@ -39,26 +37,4 @@ public partial class Form1
         rtb.ScrollToCaret();
     }
 
-    private static bool TryParseDateOnly(string? s, out DateOnly date)
-    {
-        date = default;
-        if (string.IsNullOrWhiteSpace(s)) return false;
-
-        var formats = new[] { "yyyy-MM-dd", "dd/MM/yyyy", "dd.MM.yyyy", "dd-MM-yyyy" };
-        if (DateTime.TryParseExact(s.Trim(), formats, CultureInfo.InvariantCulture,
-                DateTimeStyles.None, out var dt))
-        {
-            date = DateOnly.FromDateTime(dt);
-            return true;
-        }
-
-        // fallback
-        if (DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None, out dt))
-        {
-            date = DateOnly.FromDateTime(dt);
-            return true;
-        }
-
-        return false;
-    }
 }

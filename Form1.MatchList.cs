@@ -180,152 +180,11 @@ public partial class Form1
 
         try
         {
-            string? aId = null;
-            string? bId = null;
-
-            var hasDate = TryParseDateOnly(m.Day, out var matchDate);
-
-            if (hasDate)
-            {
-                (aId, bId) = await _dailyResolver.TryResolveCompetitorIdsAsync(
-                    matchDate, m.PlayerA, m.PlayerB, perCt);
-
-                AppendLineSafe(txtListOutput, $"  [AUTO] competitorId: A={aId ?? "brak"}, B={bId ?? "brak"}");
-            }
-            else
-            {
-                AppendLineSafe(txtListOutput, $"  [WARN] Nie umiem sparsować daty: '{m.Day}' -> lecę fallback po nazwie.");
-            }
-
-            var jsonA = aId is not null
-                ? await _matchRawJsonBuilder.BuildByCompetitorIdAsync(m.PlayerA, aId, perCt)
-                : await _matchRawJsonBuilder.BuildAsync(m.PlayerA, perCt);
-
-            var jsonB = bId is not null
-                ? await _matchRawJsonBuilder.BuildByCompetitorIdAsync(m.PlayerB, bId, perCt)
-                : await _matchRawJsonBuilder.BuildAsync(m.PlayerB, perCt);
-
-            (string surface, string indoorOutdoor, string format) = ("brak", "brak", "brak");
-
-            if (hasDate)
-            {
-                try
-                {
-                    using var metaCts = CancellationTokenSource.CreateLinkedTokenSource(perCt);
-                    metaCts.CancelAfter(TimeSpan.FromSeconds(20));
-
-                    (surface, indoorOutdoor, format) = await _tennisApi.GetWtaMatchMetaAsync(
-                        m.PlayerA, aId,
-                        m.PlayerB, bId,
-                        matchDate,
-                        metaCts.Token);
-
-                    AppendLineSafe(txtListOutput, $"  [AUTO] META: {surface}, {indoorOutdoor}, {format}");
-                }
-                catch (Exception ex)
-                {
-                    AppendLineSafe(txtListOutput, $"  [WARN] META niedostępne: {ex.Message}");
-                }
-            }
-
-            var fill11_2 = (aId is not null)
-                ? await _balanceBuilder.BuildByCompetitorIdAsync(m.PlayerA, aId, perCt)
-                : "12M: brak danych\n10W: brak danych\nJakość bilansu: brak danych";
-
-            var fill12_2 = (bId is not null)
-                ? await _balanceBuilder.BuildByCompetitorIdAsync(m.PlayerB, bId, perCt)
-                : "12M: brak danych\n10W: brak danych\nJakość bilansu: brak danych";
-
-            string fill_6;
-            try
-            {
-                using var rankCts = CancellationTokenSource.CreateLinkedTokenSource(perCt);
-                rankCts.CancelAfter(TimeSpan.FromSeconds(20));
-
-                AppendLineSafe(txtListOutput, "  [AUTO] Pobieram rankingi (World/Race)...");
-                fill_6 = await _tennisApi.BuildFill6_WorldAndRaceAsync(
-                    m.PlayerA, aId,
-                    m.PlayerB, bId,
-                    rankCts.Token);
-
-                AppendLineSafe(txtListOutput, "  [AUTO] Rankingi OK.");
-            }
-            catch (Exception ex)
-            {
-                AppendLineSafe(txtListOutput, $"  [WARN] Rankingi niedostępne: {ex.Message}");
-                fill_6 = "Brak danych";
-            }
-
-            string fill_13;
-            try
-            {
-                using var h2hCts = CancellationTokenSource.CreateLinkedTokenSource(perCt);
-                h2hCts.CancelAfter(TimeSpan.FromSeconds(20));
-
-                fill_13 = (aId is not null && bId is not null)
-                    ? await _tennisApi.BuildFill13_H2H_Last12MonthsAsync(m.PlayerA, aId, m.PlayerB, bId, h2hCts.Token)
-                    : "H2H (12M): brak danych";
-            }
-            catch (Exception ex)
-            {
-                AppendLineSafe(txtListOutput, $"  [WARN] H2H niedostępne: {ex.Message}");
-                fill_13 = "H2H (12M): brak danych";
-            }
-
-            string fill12_3 = "hold%: brak\n1st won%: brak\n2nd serve points won%: brak";
-            string fill12_4 = "break%: brak";
-
-            try
-            {
-                using var srCts = CancellationTokenSource.CreateLinkedTokenSource(perCt);
-                srCts.CancelAfter(TimeSpan.FromSeconds(120));
-
-                AppendLineSafe(txtListOutput, "  [AUTO] Serwis/Return B (last 52 weeks overall)...");
-                (fill12_3, fill12_4) = await _tennisApi.BuildFill12_3_12_4_ServeReturn_Last52WeeksOverallAsync(
-                    m.PlayerB, bId, srCts.Token);
-
-                AppendLineSafe(txtListOutput, "  [AUTO] Serwis/Return B OK.");
-            }
-            catch (Exception ex)
-            {
-                AppendLineSafe(txtListOutput, $"  [WARN] Serwis/Return B niedostępne: {ex.Message}");
-            }
-
-            string fill11_3 = "hold%: brak\n1st won%: brak\n2nd serve points won%: brak";
-            string fill11_4 = "break%: brak";
-
-            try
-            {
-                using var aSrvCts = CancellationTokenSource.CreateLinkedTokenSource(perCt);
-                aSrvCts.CancelAfter(TimeSpan.FromSeconds(120));
-
-                AppendLineSafe(txtListOutput, "  [AUTO] Serwis/Return A (last 52 weeks overall)...");
-                (fill11_3, fill11_4) = await _tennisApi.BuildFill11_3_11_4_ServeReturn_Last52WeeksOverallAsync(
-                    m.PlayerA, aId, aSrvCts.Token);
-
-                AppendLineSafe(txtListOutput, "  [AUTO] Serwis/Return A OK.");
-            }
-            catch (Exception ex)
-            {
-                AppendLineSafe(txtListOutput, $"  [WARN] Serwis/Return A niedostępne: {ex.Message}");
-            }
-
-            var prefilled = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["<<FILL_3>>"] = surface,
-                ["<<FILL_4>>"] = indoorOutdoor,
-                ["<<FILL_5>>"] = format,
-                ["<<FILL_6>>"] = fill_6,
-                ["<<FILL_11_1>>"] = jsonA,
-                ["<<FILL_11_2>>"] = fill11_2,
-                ["<<FILL_11_3>>"] = fill11_3,
-                ["<<FILL_11_4>>"] = fill11_4,
-                ["<<FILL_12_1>>"] = jsonB,
-                ["<<FILL_12_2>>"] = fill12_2,
-                ["<<FILL_12_3>>"] = fill12_3,
-                ["<<FILL_12_4>>"] = fill12_4,
-                ["<<FILL_13>>"] = fill_13
-            };
+            // logika "AUTO" (Sportradar + wyliczenia) jest w osobnym serwisie
+            var prefill = await _prefillBuilder.BuildAsync(
+                m,
+                perCt,
+                log: msg => AppendLineSafe(txtListOutput, msg));
 
             var res = await _listPipeline.AnalyzeAsyncInteractive(
                 m,
@@ -335,7 +194,7 @@ public partial class Form1
                 {
                     AppendLineSafe(txtListOutput, $"   krok {stepNo}/{stepTotal}: {stepTitle}");
                 },
-                prefilled: prefilled,
+                prefilled: prefill.Prefilled,
                 ct: perCt);
 
             AppendLineSafe(rtbdoc, res);

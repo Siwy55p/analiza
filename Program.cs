@@ -112,6 +112,9 @@ Podsumowanie: [DO UZUPEŁNIENIA]";
                 services.AddSingleton<IRankService, SportradarRankService>();
                 services.AddSingleton<IMatchRawJsonBuilder, MatchRawJsonBuilder>();
 
+                // budowanie prefilled placeholderów (logika "auto" poza Form1)
+                services.AddSingleton<IMatchPrefillBuilder, MatchPrefillBuilder>();
+
                 services.AddSingleton<MatchListPipeline>();
 
                 services.AddHttpClient<IOpenAiLogService, OpenAiLogService>();

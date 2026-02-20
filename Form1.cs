@@ -10,9 +10,7 @@ public partial class Form1 : Form
 {
     private readonly ITennisApiService _tennisApi;
     private readonly IOpenAiService _openAiService;
-    private readonly IMatchBalanceFillBuilder _balanceBuilder;
-    private readonly ISportradarDailyMatchResolver _dailyResolver;
-    private readonly IMatchRawJsonBuilder _matchRawJsonBuilder;
+    private readonly IMatchPrefillBuilder _prefillBuilder;
     private readonly IServiceProvider _sp;
     private readonly IOpenAiLogService _logService;
     private readonly IMatchListPipelineStepStore _listStepStore;
@@ -43,9 +41,7 @@ public partial class Form1 : Form
 
         _tennisApi = null!;
         _openAiService = null!;
-        _balanceBuilder = null!;
-        _dailyResolver = null!;
-        _matchRawJsonBuilder = null!;
+        _prefillBuilder = null!;
         _sp = null!;
         _logService = null!;
         _listStepStore = null!;
@@ -56,10 +52,8 @@ public partial class Form1 : Form
 
     [ActivatorUtilitiesConstructor]
     public Form1(
-        IMatchRawJsonBuilder matchRawJsonBuilder,
-        ISportradarDailyMatchResolver dailyMatchResolver,
-        IMatchBalanceFillBuilder balanceBuilder,
         ITennisApiService tennisApi,
+        IMatchPrefillBuilder prefillBuilder,
         IMatchListPipelineStepStore listStepStore,
         IServiceProvider sp,
         StsMatchListScraper listScraper,
@@ -76,9 +70,7 @@ public partial class Form1 : Form
         _logService = logService;
 
         _tennisApi = tennisApi;
-        _dailyResolver = dailyMatchResolver;
-        _matchRawJsonBuilder = matchRawJsonBuilder;
-        _balanceBuilder = balanceBuilder;
+        _prefillBuilder = prefillBuilder;
 
         _openAiService = openAiService;
         _srMeter = srMeter;
