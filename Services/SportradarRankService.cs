@@ -1,5 +1,5 @@
-﻿using System.Text.Json;
 using STSAnaliza.Interfejs;
+using STSAnaliza.Services.SportradarDtos;
 
 namespace STSAnaliza.Services;
 
@@ -24,6 +24,7 @@ public sealed class SportradarRankService : IRankService
 
         await EnsureLoadedAsync(ct);
 
+        competitorId = SportradarId.NormalizeOptional(competitorId);
         return _rankByCompetitorId.TryGetValue(competitorId, out var r) ? r : null;
     }
 
@@ -39,8 +40,8 @@ public sealed class SportradarRankService : IRankService
             if (_rankByCompetitorId.Count > 0 && (DateTimeOffset.UtcNow - _loadedAtUtc) < TimeSpan.FromHours(6))
                 return;
 
-            var json = await _client.GetRankingsJsonAsync(ct);
-            _rankByCompetitorId = ParseRankings(json);
+            var dto = await _client.GetRankingsAsync(ct);
+            _rankByCompetitorId = BuildRankingsMap(dto);
 
             _loadedAtUtc = DateTimeOffset.UtcNow;
         }
@@ -50,44 +51,25 @@ public sealed class SportradarRankService : IRankService
         }
     }
 
-    private static Dictionary<string, int> ParseRankings(string json)
+    private static Dictionary<string, int> BuildRankingsMap(RankingsResponseDto dto)
     {
-        using var doc = JsonDocument.Parse(json);
         var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
-        void Walk(JsonElement el)
+        foreach (var ranking in dto.Rankings ?? Array.Empty<RankingDto>())
         {
-            if (el.ValueKind == JsonValueKind.Object)
+            foreach (var cr in ranking.CompetitorRankings ?? Array.Empty<CompetitorRankingDto>())
             {
-                // Szukamy wzorca: { rank: <int>, competitor: { id: "sr:competitor:..." } }
-                if (el.TryGetProperty("competitor", out var comp) &&
-                    comp.ValueKind == JsonValueKind.Object &&
-                    comp.TryGetProperty("id", out var idEl) &&
-                    idEl.ValueKind == JsonValueKind.String)
-                {
-                    var id = idEl.GetString();
+                var id = cr.Competitor?.Id;
+                var rank = cr.Rank;
 
-                    if (!string.IsNullOrWhiteSpace(id) &&
-                        el.TryGetProperty("rank", out var rankEl))
-                    {
-                        if (rankEl.ValueKind == JsonValueKind.Number && rankEl.TryGetInt32(out var r))
-                            map[id] = r;
-                        else if (rankEl.ValueKind == JsonValueKind.String && int.TryParse(rankEl.GetString(), out r))
-                            map[id] = r;
-                    }
-                }
+                if (string.IsNullOrWhiteSpace(id) || rank is null || rank.Value <= 0)
+                    continue;
 
-                foreach (var p in el.EnumerateObject())
-                    Walk(p.Value);
-            }
-            else if (el.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var x in el.EnumerateArray())
-                    Walk(x);
+                // jeśli duplikat – nie nadpisuj
+                map.TryAdd(id, rank.Value);
             }
         }
 
-        Walk(doc.RootElement);
         return map;
     }
 }

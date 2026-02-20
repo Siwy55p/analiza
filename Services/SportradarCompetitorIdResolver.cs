@@ -1,7 +1,6 @@
-﻿using System.Collections.Concurrent;
-using System.Text.Json;
 using STSAnaliza.Interfejs;
-
+using STSAnaliza.Services.SportradarDtos;
+using System.Collections.Concurrent;
 
 namespace STSAnaliza.Services;
 
@@ -56,10 +55,9 @@ public sealed class SportradarCompetitorIdResolver : ICompetitorIdResolver
 
             _map.Clear();
 
-            var json = await _client.GetRankingsJsonAsync(ct);
-            using var doc = JsonDocument.Parse(json);
-
-            Walk(doc.RootElement);
+            // DTO (w środku klient cache'uje JSON i DTO)
+            var dto = await _client.GetRankingsAsync(ct);
+            FillMap(dto);
 
             _loadedAtUtc = DateTimeOffset.UtcNow;
         }
@@ -69,34 +67,21 @@ public sealed class SportradarCompetitorIdResolver : ICompetitorIdResolver
         }
     }
 
-    private void Walk(JsonElement el)
+    private void FillMap(RankingsResponseDto dto)
     {
-        switch (el.ValueKind)
+        foreach (var ranking in dto.Rankings ?? Array.Empty<RankingDto>())
         {
-            case JsonValueKind.Object:
-                if (el.TryGetProperty("competitor", out var comp) && comp.ValueKind == JsonValueKind.Object)
-                {
-                    if (comp.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.String &&
-                        comp.TryGetProperty("name", out var nameEl) && nameEl.ValueKind == JsonValueKind.String)
-                    {
-                        var id = idEl.GetString();
-                        var name = nameEl.GetString();
-                        if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(name))
-                        {
-                            var key = SportradarName.NormalizeKey(name);
-                            _map.TryAdd(key, id);
-                        }
-                    }
-                }
+            foreach (var cr in ranking.CompetitorRankings ?? Array.Empty<CompetitorRankingDto>())
+            {
+                var id = cr.Competitor?.Id;
+                var name = cr.Competitor?.Name;
 
-                foreach (var p in el.EnumerateObject())
-                    Walk(p.Value);
-                break;
+                if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(name))
+                    continue;
 
-            case JsonValueKind.Array:
-                foreach (var x in el.EnumerateArray())
-                    Walk(x);
-                break;
+                var key = SportradarName.NormalizeKey(name);
+                _map.TryAdd(key, id);
+            }
         }
     }
 
