@@ -4,6 +4,7 @@ using STSAnaliza.Interfejs;
 using STSAnaliza.Services;
 using System.Globalization;
 using System.Threading.Channels;
+using STSAnaliza.Models;
 
 namespace STSAnaliza
 {

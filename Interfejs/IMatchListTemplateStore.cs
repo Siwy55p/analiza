@@ -1,4 +1,4 @@
-namespace STSAnaliza;
+﻿namespace STSAnaliza.Interfejs;
 
 public interface IMatchListTemplateStore
 {

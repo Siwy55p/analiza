@@ -1,6 +1,7 @@
-using System.Text;
+﻿using System.Text;
+using STSAnaliza.Interfejs;
 
-namespace STSAnaliza;
+namespace STSAnaliza.Services.Stores;
 
 public sealed class TextMatchListTemplateStore : IMatchListTemplateStore
 {

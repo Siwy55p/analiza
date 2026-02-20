@@ -1,6 +1,6 @@
-using STSAnaliza.Models;
+﻿using STSAnaliza.Models;
 
-namespace STSAnaliza.Services;
+namespace STSAnaliza.Interfejs;
 
 public interface ITennisApiService
 {

@@ -4,6 +4,7 @@ using STSAnaliza.Services.SportradarDtos;
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
+using STSAnaliza.Interfejs;
 
 namespace STSAnaliza.Services;
 

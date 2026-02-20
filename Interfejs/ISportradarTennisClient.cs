@@ -1,6 +1,6 @@
 ﻿using STSAnaliza.Services.SportradarDtos;
 
-namespace STSAnaliza.Services;
+namespace STSAnaliza.Interfejs;
 
 public interface ISportradarTennisClient
 {

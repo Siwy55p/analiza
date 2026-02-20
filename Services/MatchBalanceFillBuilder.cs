@@ -1,4 +1,5 @@
 ﻿using STSAnaliza.Models;
+using STSAnaliza.Interfejs;
 
 namespace STSAnaliza.Services;
 

@@ -1,5 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Text.Json;
+using STSAnaliza.Interfejs;
+
 
 namespace STSAnaliza.Services;
 

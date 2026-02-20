@@ -1,4 +1,4 @@
-namespace STSAnaliza.Services;
+﻿namespace STSAnaliza.Interfejs;
 
 public interface ICompetitorIdResolver
 {

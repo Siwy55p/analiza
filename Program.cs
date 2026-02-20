@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -9,6 +9,7 @@ using STSAnaliza.Options;
 using STSAnaliza.Services;
 using System.ClientModel;
 using System.ClientModel.Primitives;
+using STSAnaliza.Services.Stores;
 
 namespace STSAnaliza;
 

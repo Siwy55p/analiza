@@ -1,5 +1,6 @@
-namespace STSAnaliza;
+﻿namespace STSAnaliza;
 
+using STSAnaliza.Interfejs;
 public partial class ListTemplateForm : Form
 {
     private readonly IMatchListTemplateStore _store;

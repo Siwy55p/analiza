@@ -1,4 +1,5 @@
-using System.Globalization;
+﻿using System.Globalization;
+using STSAnaliza.Interfejs;
 
 namespace STSAnaliza.Services;
 

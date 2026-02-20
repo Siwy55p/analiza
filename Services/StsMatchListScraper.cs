@@ -1,9 +1,9 @@
 ﻿using Microsoft.Playwright;
 using System.Globalization;
 using System.Text;
-using STSAnaliza.Services;
+using STSAnaliza.Models;
 
-namespace STSAnaliza
+namespace STSAnaliza.Services
 {
     public class StsMatchListScraper
     {
