@@ -199,7 +199,7 @@ public sealed partial class TennisApiService
 
     private async Task<ServeReturnMetrics> ComputeServeReturnLastNAsync(string competitorId, int n, CancellationToken ct)
     {
-        var matches = await GetRecentClosedSinglesMatchesAsync(competitorId, ct, SurfaceResolutionMode.None, Math.Max(n, 20));
+        var matches = await GetRecentClosedSinglesMatchesAsync(competitorId, ct);
 
         var agg = new ServeReturnCalculator.Agg();
 
@@ -221,7 +221,7 @@ public sealed partial class TennisApiService
 
     private async Task<ServeReturnMetrics> ComputeFromMostRecentMatchWithStatsAsync(string competitorId, CancellationToken ct)
     {
-        var matches = await GetRecentClosedSinglesMatchesAsync(competitorId, ct, SurfaceResolutionMode.None, 25);
+        var matches = await GetRecentClosedSinglesMatchesAsync(competitorId, ct);
 
         foreach (var m in matches)
         {

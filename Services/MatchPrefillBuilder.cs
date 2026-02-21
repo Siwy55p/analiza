@@ -2,7 +2,6 @@
 using STSAnaliza.Interfejs;
 using STSAnaliza.Models;
 using System.Globalization;
-using System.Text.RegularExpressions;
 
 namespace STSAnaliza.Services;
 
@@ -12,7 +11,7 @@ public sealed class MatchPrefillBuilder : IMatchPrefillBuilder
     private readonly ISportradarDailyMatchResolver _dailyResolver;
     private readonly IMatchRawJsonBuilder _matchRawJsonBuilder;
     private readonly IMatchBalanceFillBuilder _balanceBuilder;
-    private readonly IWtaEloService _eloService;
+    private readonly ITennisAbstractEloService _eloService;
     private readonly ILogger<MatchPrefillBuilder> _logger;
 
     public MatchPrefillBuilder(
@@ -20,7 +19,7 @@ public sealed class MatchPrefillBuilder : IMatchPrefillBuilder
         ISportradarDailyMatchResolver dailyResolver,
         IMatchRawJsonBuilder matchRawJsonBuilder,
         IMatchBalanceFillBuilder balanceBuilder,
-        IWtaEloService eloService,
+        ITennisAbstractEloService eloService,
         ILogger<MatchPrefillBuilder> logger)
     {
         _tennisApi = tennisApi;
@@ -103,8 +102,8 @@ public sealed class MatchPrefillBuilder : IMatchPrefillBuilder
             using var eloCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             eloCts.CancelAfter(TimeSpan.FromSeconds(20));
 
-            log?.Invoke("  [AUTO] Pobieram Elo (WTA Elo: TA -> Kick-Serve fallback)");
-            fill_7 = await _eloService.BuildFill7Async(m.PlayerA, m.PlayerB, surface, eloCts.Token, log);
+            log?.Invoke("  [AUTO] Pobieram Elo (TennisAbstract WTA)...");
+            fill_7 = await _eloService.BuildFill7Async(m.PlayerA, m.PlayerB, surface, eloCts.Token);
             log?.Invoke("  [AUTO] Elo OK.");
         }
         catch (Exception ex)

@@ -10,6 +10,10 @@ public sealed class MatchRawJsonBuilder : IMatchRawJsonBuilder
     private readonly ITennisApiService _tennisApi;
     private readonly IRankService _rank;
 
+    // "Forma" ma bazować na świeżych danych.
+    // Jeśli zawodnik nie grał długo (np. kontuzja), wolimy zwrócić n=0 niż brać mecze sprzed lat.
+    private static readonly TimeSpan MaxAgeForForm = TimeSpan.FromDays(365);
+
     public MatchRawJsonBuilder(ITennisApiService tennisApi, IRankService rank)
     {
         _tennisApi = tennisApi;
@@ -30,8 +34,14 @@ public sealed class MatchRawJsonBuilder : IMatchRawJsonBuilder
 
     private async Task<string> BuildJsonFromMatchesAsync(string playerName, IReadOnlyList<PlayerMatchSummary> list, CancellationToken ct)
     {
-        var n = list.Count >= 8 ? 8 : (list.Count >= 7 ? 7 : list.Count);
-        var picked = n > 0 ? list.Take(n).ToList() : new List<PlayerMatchSummary>();
+        // Filtr świeżości: tylko ostatnie 12 miesięcy.
+        // Uwaga: list jest już posortowana malejąco po dacie (z TennisApiService).
+        var cutoffUtc = DateTimeOffset.UtcNow - MaxAgeForForm;
+        var recent = list.Where(m => m.StartTimeUtc >= cutoffUtc).ToList();
+
+        // Bierzemy max 8, ale jeśli jest mniej, nie "dobieramy" starszych.
+        var n = recent.Count >= 8 ? 8 : (recent.Count >= 7 ? 7 : recent.Count);
+        var picked = n > 0 ? recent.Take(n).ToList() : new List<PlayerMatchSummary>();
 
 
         using var ms = new MemoryStream();

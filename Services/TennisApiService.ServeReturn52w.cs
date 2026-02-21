@@ -1,6 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using System.Globalization;
 using STSAnaliza.Interfejs;
-using System.Globalization;
 
 namespace STSAnaliza.Services;
 
@@ -33,19 +32,6 @@ public sealed partial class TennisApiService
             maxEventsToTry: 35,
             minMatchesWithStats: 8,
             ct);
-
-        // jeśli w 52 tyg. nic nie wyszło – spróbuj najświeższego meczu ze statami (bez limitu daty)
-        var hasAny =
-            metrics.HoldPct is not null ||
-            metrics.FirstWonPct is not null ||
-            metrics.SecondWonPct is not null ||
-            (metrics.BreakPct is not null && metrics.TotalBreakpoints > 0);
-
-        if (!hasAny)
-        {
-            _logger.LogInformation("Serve/Return 52W: brak danych dla {Id} -> fallback do most recent match with stats.", id);
-            metrics = await ComputeFromMostRecentMatchWithStatsAsync(id, ct);
-        }
 
         static string Pct(double? x) => x is null
             ? "brak"

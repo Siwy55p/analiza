@@ -10,22 +10,13 @@ public sealed partial class TennisApiService
 {
     // Recent matches (closed singles) + surface
     // -------------------------
-    public async Task<IReadOnlyList<PlayerMatchSummary>> GetRecentClosedSinglesMatchesAsync(
-        string competitorId,
-        CancellationToken ct,
-        SurfaceResolutionMode surfaceMode = SurfaceResolutionMode.CtxOrSeason,
-        int maxMatchesToParse = MaxClosedMatchesToParse)
+    public async Task<IReadOnlyList<PlayerMatchSummary>> GetRecentClosedSinglesMatchesAsync(string competitorId, CancellationToken ct)
     {
         var cid = NormalizeId(competitorId);
         if (cid.Length == 0)
             return Array.Empty<PlayerMatchSummary>();
 
-        maxMatchesToParse = Math.Clamp(maxMatchesToParse, 1, MaxClosedMatchesToParse);
-
-        // cache key zależny od trybu i limitu (żeby np. Balance z None nie psuł cache dla RawJson)
-        var cacheKey = $"{cid}|{(int)surfaceMode}|{maxMatchesToParse}";
-
-        if (_recentCache.TryGetValue(cacheKey, out var cached) &&
+        if (_recentCache.TryGetValue(cid, out var cached) &&
             (DateTimeOffset.UtcNow - cached.FetchedAtUtc) < RecentCacheTtl)
         {
             return cached.Matches;
@@ -33,35 +24,24 @@ public sealed partial class TennisApiService
 
         var dto = await _client.GetCompetitorSummariesAsync(cid, ct);
 
-        var all = await ParseClosedSinglesMatchesAsync(dto, cid, surfaceMode, maxMatchesToParse, ct);
+        var all = await ParseClosedSinglesMatchesAsync(dto, cid, ct);
 
-        _recentCache[cacheKey] = (DateTimeOffset.UtcNow, all);
+        _recentCache[cid] = (DateTimeOffset.UtcNow, all);
 
-        _logger.LogInformation("Sportradar: pobrano {Count} meczów (recent) dla {CompetitorId} (surfaceMode={Mode}, max={Max})",
-            all.Count, cid, surfaceMode, maxMatchesToParse);
+        _logger.LogInformation("Sportradar: pobrano {Count} meczów (recent) dla {CompetitorId}",
+            all.Count, cid);
 
-        // nie spamuj logów o surface jeśli tryb = None (bo wtedy zawsze będzie "brak")
-        if (surfaceMode != SurfaceResolutionMode.None)
-        {
-            var surfaceStats = all.GroupBy(x => x.Surface ?? "brak")
-                                  .ToDictionary(g => g.Key, g => g.Count());
-            _logger.LogInformation("Surface stats for {CompetitorId}: {Stats}",
-                cid, string.Join(", ", surfaceStats.Select(kv => $"{kv.Key}:{kv.Value}")));
-        }
+        var surfaceStats = all.GroupBy(x => x.Surface ?? "brak")
+                              .ToDictionary(g => g.Key, g => g.Count());
+        _logger.LogInformation("Surface stats for {CompetitorId}: {Stats}",
+            cid, string.Join(", ", surfaceStats.Select(kv => $"{kv.Key}:{kv.Value}")));
 
         return all;
     }
 
     public async Task<IReadOnlyList<PlayerMatchSummary>> GetLast10MatchesAsync(string competitorId, CancellationToken ct)
     {
-        // RawJson potrzebuje surface -> ctx + ewentualny sezon, ale nie ma sensu parsować 80 pozycji,
-        // skoro i tak bierzemy 10. Mały bufor, żeby rzadko wypadło <10.
-        var all = await GetRecentClosedSinglesMatchesAsync(
-            competitorId,
-            ct,
-            surfaceMode: SurfaceResolutionMode.CtxOrSeason,
-            maxMatchesToParse: 15);
-
+        var all = await GetRecentClosedSinglesMatchesAsync(competitorId, ct);
         var last10 = all.Take(10).ToList();
 
         _logger.LogInformation("Sportradar: pobrano {Count} ostatnich meczów dla {CompetitorId}",
@@ -94,8 +74,6 @@ public sealed partial class TennisApiService
     private async Task<List<PlayerMatchSummary>> ParseClosedSinglesMatchesAsync(
         CompetitorSummariesResponse dto,
         string competitorId,
-        SurfaceResolutionMode surfaceMode,
-        int maxMatchesToParse,
         CancellationToken ct)
     {
         var items = dto.Summaries ?? new List<SummaryItem>();
@@ -104,12 +82,10 @@ public sealed partial class TennisApiService
             .Where(x => IsFinishedStatus(x.SportEventStatus?.Status))
             .Where(x => x.SportEvent?.StartTime != null)
             .OrderByDescending(x => x.SportEvent!.StartTime!.Value)
-            .Take(maxMatchesToParse)
+            .Take(MaxClosedMatchesToParse) // ✅ limit = mniej sezonów = mniej requestów
             .ToList();
 
-        Dictionary<string, string?>? seasonSurfaceMap = null;
-        if (surfaceMode == SurfaceResolutionMode.CtxOrSeason)
-            seasonSurfaceMap = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        var seasonSurfaceMap = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
         var result = new List<PlayerMatchSummary>(capacity: closed.Count);
         int brakCount = 0;
@@ -140,34 +116,25 @@ public sealed partial class TennisApiService
             var isWin = string.Equals(st.WinnerId, competitorId, StringComparison.OrdinalIgnoreCase);
             var score = BuildScoreFromMyPerspective(st, myQualifier: me?.Qualifier);
 
-            string surface;
+            var ctx = s.SportEventContext ?? ev.SportEventContext;
 
-            if (surfaceMode == SurfaceResolutionMode.None)
+            // A) ctx surface (jeśli jest)
+            var ctxSurfaceRaw = ctx?.SportEventConditions?.Surface?.Name;
+            var surface = NormalizeSurface(ctxSurfaceRaw);
+
+            // B) fallback: season.info.surface — tylko jeśli surface brak (lazy)
+            if (surface == "brak")
             {
-                surface = "brak";
-            }
-            else
-            {
-                var ctx = s.SportEventContext ?? ev.SportEventContext;
-
-                // A) ctx surface (jeśli jest)
-                var ctxSurfaceRaw = ctx?.SportEventConditions?.Surface?.Name;
-                surface = NormalizeSurface(ctxSurfaceRaw);
-
-                // B) fallback: season.info.surface — tylko jeśli surface brak i tryb na to pozwala
-                if (surface == "brak" && surfaceMode == SurfaceResolutionMode.CtxOrSeason)
+                var sid = NormalizeId(ctx?.Season?.Id);
+                if (sid.Length > 0)
                 {
-                    var sid = NormalizeId(ctx?.Season?.Id);
-                    if (sid.Length > 0)
+                    if (!seasonSurfaceMap.TryGetValue(sid, out var seasonSurfaceRaw))
                     {
-                        if (!seasonSurfaceMap!.TryGetValue(sid, out var seasonSurfaceRaw))
-                        {
-                            seasonSurfaceRaw = await GetSeasonSurfaceCachedAsync(sid, ct);
-                            seasonSurfaceMap[sid] = seasonSurfaceRaw;
-                        }
-
-                        surface = NormalizeSurface(seasonSurfaceRaw);
+                        seasonSurfaceRaw = await GetSeasonSurfaceCachedAsync(sid, ct);
+                        seasonSurfaceMap[sid] = seasonSurfaceRaw;
                     }
+
+                    surface = NormalizeSurface(seasonSurfaceRaw);
                 }
             }
 
@@ -185,11 +152,8 @@ public sealed partial class TennisApiService
             ));
         }
 
-        if (surfaceMode != SurfaceResolutionMode.None)
-        {
-            _logger.LogInformation("ParseClosedSinglesMatchesAsync: surface 'brak' = {Missing}/{Total} dla {CompetitorId} (mode={Mode})",
-                brakCount, result.Count, competitorId, surfaceMode);
-        }
+        _logger.LogInformation("ParseClosedSinglesMatchesAsync: surface 'brak' = {Missing}/{Total} dla {CompetitorId}",
+            brakCount, result.Count, competitorId);
 
         return result;
     }
