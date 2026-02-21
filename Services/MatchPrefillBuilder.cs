@@ -11,7 +11,7 @@ public sealed class MatchPrefillBuilder : IMatchPrefillBuilder
     private readonly ISportradarDailyMatchResolver _dailyResolver;
     private readonly IMatchRawJsonBuilder _matchRawJsonBuilder;
     private readonly IMatchBalanceFillBuilder _balanceBuilder;
-    private readonly ITennisAbstractEloService _eloService;
+    private readonly IWtaEloService _eloService;
     private readonly ILogger<MatchPrefillBuilder> _logger;
 
     public MatchPrefillBuilder(
@@ -19,7 +19,7 @@ public sealed class MatchPrefillBuilder : IMatchPrefillBuilder
         ISportradarDailyMatchResolver dailyResolver,
         IMatchRawJsonBuilder matchRawJsonBuilder,
         IMatchBalanceFillBuilder balanceBuilder,
-        ITennisAbstractEloService eloService,
+        IWtaEloService eloService,
         ILogger<MatchPrefillBuilder> logger)
     {
         _tennisApi = tennisApi;
