@@ -1,4 +1,5 @@
 ﻿using STSAnaliza.Interfejs;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using STSAnaliza.Models;
@@ -33,6 +34,9 @@ public sealed class MatchListPipeline
         {
             "<<FILL_16>>"
         };
+
+    private const string Fill16Token = "<<FILL_16>>";
+    private const string Fill18Token = "<<FILL_18>>";
 
     private static string BuildStepContextMessage(
         MatchListItem match,
@@ -180,10 +184,10 @@ public sealed class MatchListPipeline
                 stepPrompt += $"\nOdds(A)={match.OddA} Odds(B)={match.OddB}";
             }
 
-            var placeholders = ExtractPlaceholdersFromStepPrompt(stepPrompt);
+            var placeholdersAll = ExtractPlaceholdersFromStepPrompt(stepPrompt).ToList();
 
             // Jeśli krok nie operuje na placeholderach -> tryb "pełny dokument"
-            if (placeholders.Count == 0)
+            if (placeholdersAll.Count == 0)
             {
                 bool useWebSearch = step.WebSearch ?? enableWebSearch; // krok ma priorytet, null => global
                 _ai.StartChat(stepPrompt, enableWebSearch: useWebSearch);
@@ -208,19 +212,64 @@ public sealed class MatchListPipeline
                 continue;
             }
 
+            // Bierzemy tylko brakujące placeholdery
+            var missing = placeholdersAll.Where(p => !filled.ContainsKey(p)).ToList();
+
             // Jeśli wszystkie placeholdery już są, pomijamy krok
-            if (placeholders.All(p => filled.ContainsKey(p)))
+            if (missing.Count == 0)
             {
                 onChat?.Invoke($"AUTO: pominięto krok '{step.Title}' (placeholdery już wypełnione).");
                 continue;
             }
 
-            var expectedFormat = BuildExpectedKvFormat(placeholders);
+            // -------------------------
+            // AUTO: <<FILL_18>> liczymy dopiero po <<FILL_16>>
+            // -------------------------
+            if (missing.Contains(Fill18Token, StringComparer.OrdinalIgnoreCase))
+            {
+                filled.TryGetValue(Fill16Token, out var fill16Value);
+
+                if (TryBuildFill18(match, fill16Value, stepPrompt, out var fill18, out var err18))
+                {
+                    var map18 = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        [Fill18Token] = fill18
+                    };
+
+                    doc = ApplyFillMap(doc, map18);
+                    filled[Fill18Token] = fill18;
+
+                    onChat?.Invoke($"AUTO: wyliczono {Fill18Token}.");
+                    missing.RemoveAll(x => x.Equals(Fill18Token, StringComparison.OrdinalIgnoreCase));
+                }
+                else
+                {
+                    // Jeśli ten krok jest TYLKO od FILL_18 -> pomiń (policzymy po FILL_16)
+                    if (placeholdersAll.Count == 1 && placeholdersAll[0].Equals(Fill18Token, StringComparison.OrdinalIgnoreCase))
+                    {
+                        onChat?.Invoke($"AUTO: pominięto krok '{step.Title}' – {Fill18Token} będzie policzony po {Fill16Token}. ({err18})");
+                        continue;
+                    }
+
+                    // Jeśli krok ma też inne placeholdery -> niech AI uzupełni resztę, a FILL_18 domkniemy później
+                    onChat?.Invoke($"AUTO: {Fill18Token} jeszcze nie gotowe – pomijam w tym kroku. ({err18})");
+                    missing.RemoveAll(x => x.Equals(Fill18Token, StringComparison.OrdinalIgnoreCase));
+                }
+            }
+
+            // Po usunięciu FILL_18 może już nic nie zostać
+            if (missing.Count == 0)
+            {
+                onChat?.Invoke($"AUTO: pominięto krok '{step.Title}' (brak pozostałych placeholderów do uzupełnienia).");
+                continue;
+            }
+
+            var expectedFormat = BuildExpectedKvFormat(missing);
 
             var systemPrompt =
                 stepPrompt + "\n\n" +
                 "Zwróć bloki tylko dla tych placeholderów (każdy dokładnie raz):\n" +
-                BuildExpectedKeysList(placeholders) + "\n\n" +
+                BuildExpectedKeysList(missing) + "\n\n" +
                 "Nie zwracaj całego dokumentu. Nie dodawaj komentarzy ani innego tekstu poza blokami.\n" +
                 "Jeśli musisz zapytać użytkownika o dane, zwróć WYŁĄCZNIE:\n" +
                 "NEED_USER: <pytanie>";
@@ -228,7 +277,7 @@ public sealed class MatchListPipeline
             bool useWebSearch2 = step.WebSearch ?? enableWebSearch; // krok ma priorytet, null => global
             _ai.StartChat(systemPrompt, enableWebSearch: useWebSearch2);
 
-            var firstUser = BuildStepContextMessage(match, doc, stepPrompt, placeholders, filled);
+            var firstUser = BuildStepContextMessage(match, doc, stepPrompt, placeholdersAll, filled);
 
             var assistant = await _ai.SendChatAsync(firstUser, perStepCts.Token);
 
@@ -244,7 +293,7 @@ public sealed class MatchListPipeline
             int tries = 0;
             while (tries < 2)
             {
-                if (TryParseFillKv(assistant, placeholders, out var map, out var parseErr))
+                if (TryParseFillKv(assistant, missing, out var map, out var parseErr))
                 {
                     // 1) wypełnij doc (<<FILL_X>> -> wartości)
                     doc = ApplyFillMap(doc, map);
@@ -260,6 +309,22 @@ public sealed class MatchListPipeline
                     doc = ReplaceTokens(doc, match);
 
                     onChat?.Invoke("GPT: (wypełniono pola w szablonie) " + step.Title);
+
+                    // Jeśli po tym kroku mamy już FILL_16, spróbuj od razu domknąć FILL_18
+                    if (!filled.ContainsKey(Fill18Token)
+                        && doc.Contains(Fill18Token, StringComparison.OrdinalIgnoreCase)
+                        && filled.TryGetValue(Fill16Token, out var f16)
+                        && TryBuildFill18(match, f16, stepPrompt, out var f18Now, out _))
+                    {
+                        var map18 = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            [Fill18Token] = f18Now
+                        };
+                        doc = ApplyFillMap(doc, map18);
+                        filled[Fill18Token] = f18Now;
+                        onChat?.Invoke($"AUTO: wyliczono {Fill18Token} po uzupełnieniu {Fill16Token}.");
+                    }
+
                     break;
                 }
 
@@ -274,6 +339,25 @@ public sealed class MatchListPipeline
                     "Błąd: " + parseErr,
                     perStepCts.Token);
             }
+        }
+
+        // Finalne domknięcie: jeśli gdzieś w dokumencie jest <<FILL_18>>, a nie policzyliśmy jeszcze
+        if (!filled.ContainsKey(Fill18Token)
+            && doc.Contains(Fill18Token, StringComparison.OrdinalIgnoreCase)
+            && filled.TryGetValue(Fill16Token, out var fill16Final)
+            && TryBuildFill18(match, fill16Final, stepPrompt: "", out var fill18Final, out var errFinal))
+        {
+            var map18 = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                [Fill18Token] = fill18Final
+            };
+            doc = ApplyFillMap(doc, map18);
+            filled[Fill18Token] = fill18Final;
+            onChat?.Invoke($"AUTO: wyliczono {Fill18Token} na końcu.");
+        }
+        else if (!filled.ContainsKey(Fill18Token) && doc.Contains(Fill18Token, StringComparison.OrdinalIgnoreCase))
+        {
+            onChat?.Invoke($"AUTO: nie udało się policzyć {Fill18Token} na końcu (brak {Fill16Token} lub kursów).");
         }
 
         onStep?.Invoke(total, total, "Gotowe");
@@ -510,4 +594,150 @@ Dane: [DO UZUPEŁNIENIA]
 Typ: [DO UZUPEŁNIENIA]
 Kursy -> P_imp -> Edge: [DO UZUPEŁNIENIA]
 Podsumowanie: [DO UZUPEŁNIENIA]";
+
+    // -------------------------
+    // AUTO: <<FILL_18>> z <<FILL_16>> + odds
+    // -------------------------
+
+    private static bool TryBuildFill18(
+        MatchListItem match,
+        string? fill16Value,
+        string stepPrompt,
+        out string fill18,
+        out string error)
+    {
+        fill18 = "";
+        error = "";
+
+        if (!TryExtractPestFFromFill16(fill16Value, out var pEstA, out var pEstB, out var pestErr))
+        {
+            error = pestErr;
+            return false;
+        }
+
+        if (!TryGetOdds(match, stepPrompt, out var oddA, out var oddB, out var oddsErr))
+        {
+            error = oddsErr;
+            return false;
+        }
+
+        var pImpA = 100.0 / oddA;
+        var pImpB = 100.0 / oddB;
+
+        var line1 = $"P_est(A)F = {Fmt1(pEstA)} [%]  P_imp(A) = {Fmt1(pImpA)} [%]  {match.PlayerA}";
+        var line2 = $"P_est(B)F = {Fmt1(pEstB)} [%]  P_imp(B) = {Fmt1(pImpB)} [%]  {match.PlayerB}";
+
+        var play = (pEstA >= 70.0 && pImpA >= 70.0) || (pEstB >= 70.0 && pImpB >= 70.0);
+
+        fill18 = play
+            ? string.Join(Environment.NewLine, line1, line2, "Zagraj (+1,5) seta dla faworyta!!")
+            : string.Join(Environment.NewLine, line1, line2);
+
+        return true;
+    }
+
+    private static bool TryExtractPestFFromFill16(
+        string? fill16Value,
+        out double pEstA,
+        out double pEstB,
+        out string error)
+    {
+        pEstA = 0;
+        pEstB = 0;
+        error = "";
+
+        if (string.IsNullOrWhiteSpace(fill16Value))
+        {
+            error = "Brak wartości <<FILL_16>> (jeszcze nie wypełnione).";
+            return false;
+        }
+
+        if (!TryExtractNamedPercent(fill16Value, "P_est(A)F", out pEstA))
+        {
+            error = "Nie znaleziono P_est(A)F w <<FILL_16>>.";
+            return false;
+        }
+
+        if (!TryExtractNamedPercent(fill16Value, "P_est(B)F", out pEstB))
+        {
+            error = "Nie znaleziono P_est(B)F w <<FILL_16>>.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryExtractNamedPercent(string text, string label, out double value)
+    {
+        value = 0;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+
+        // toleruje np:
+        // - `P_est(A)F: 73.2 [%]`
+        // - P_est(A)F: 73.2
+        // - P_est(A)F = 0.732
+        var pattern = $@"(?i)\b{Regex.Escape(label)}\b\s*[:=]\s*`?\s*([0-9]+(?:[\.,][0-9]+)?)";
+        var m = Regex.Match(text, pattern);
+        if (!m.Success) return false;
+
+        if (!TryParseDoubleInvariant(m.Groups[1].Value, out var n)) return false;
+
+        if (n is >= 0 and <= 1.0) n *= 100.0;
+        value = n;
+        return true;
+    }
+
+    private static bool TryGetOdds(
+        MatchListItem match,
+        string stepPrompt,
+        out double oddA,
+        out double oddB,
+        out string error)
+    {
+        oddA = 0;
+        oddB = 0;
+        error = "";
+
+        if (match.OddA is > 0 && match.OddB is > 0)
+        {
+            oddA = (double)match.OddA.Value;
+            oddB = (double)match.OddB.Value;
+            return true;
+        }
+
+        // fallback: jeśli gdzieś dopisałeś w prompt: Odds(A)=... Odds(B)=...
+        if (TryExtractTaggedNumber(stepPrompt, "Odds(A)", out var oa) &&
+            TryExtractTaggedNumber(stepPrompt, "Odds(B)", out var ob) &&
+            oa > 0 && ob > 0)
+        {
+            oddA = oa;
+            oddB = ob;
+            return true;
+        }
+
+        error = "Brak kursów: match.OddA/OddB puste i nie znaleziono Odds(A)/Odds(B) w prompt.";
+        return false;
+    }
+
+    private static bool TryExtractTaggedNumber(string text, string tag, out double value)
+    {
+        value = 0;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+
+        var m = Regex.Match(text, $@"(?i)\b{Regex.Escape(tag)}\s*=\s*([0-9]+(?:[\.,][0-9]+)?)");
+        if (!m.Success) return false;
+
+        return TryParseDoubleInvariant(m.Groups[1].Value, out value);
+    }
+
+    private static bool TryParseDoubleInvariant(string s, out double value)
+    {
+        value = 0;
+        if (string.IsNullOrWhiteSpace(s)) return false;
+        s = s.Trim().Replace(',', '.');
+        return double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+    }
+
+    private static string Fmt1(double v)
+        => v.ToString("0.0", CultureInfo.InvariantCulture);
 }

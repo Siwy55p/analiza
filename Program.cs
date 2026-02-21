@@ -94,7 +94,6 @@ Podsumowanie: [DO UZUPEŁNIENIA]";
                 // metryki requestów do Sportradar (global + delta per mecz)
                 services.AddSingleton<ISportradarRequestMeter, SportradarRequestMeter>();
 
-
                 services.AddTransient<SportradarThrottlingHandler>();
 
                 services.AddHttpClient<ISportradarTennisClient, SportradarTennisClient>(client =>
@@ -111,6 +110,14 @@ Podsumowanie: [DO UZUPEŁNIENIA]";
                 services.AddSingleton<IMatchBalanceFillBuilder, MatchBalanceFillBuilder>();
                 services.AddSingleton<IRankService, SportradarRankService>();
                 services.AddSingleton<IMatchRawJsonBuilder, MatchRawJsonBuilder>();
+
+                // --- NOWE: TennisAbstract Elo (WTA) ---
+                services.AddHttpClient<ITennisAbstractEloService, TennisAbstractEloService>(client =>
+                {
+                    client.BaseAddress = new Uri("https://tennisabstract.com/");
+                    client.Timeout = TimeSpan.FromSeconds(30);
+                    client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "STSAnaliza/1.0 (+WinForms)");
+                });
 
                 // budowanie prefilled placeholderów (logika "auto" poza Form1)
                 services.AddSingleton<IMatchPrefillBuilder, MatchPrefillBuilder>();

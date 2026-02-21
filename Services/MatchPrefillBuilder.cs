@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using STSAnaliza.Interfejs;
 using STSAnaliza.Models;
 using System.Globalization;
@@ -11,6 +11,7 @@ public sealed class MatchPrefillBuilder : IMatchPrefillBuilder
     private readonly ISportradarDailyMatchResolver _dailyResolver;
     private readonly IMatchRawJsonBuilder _matchRawJsonBuilder;
     private readonly IMatchBalanceFillBuilder _balanceBuilder;
+    private readonly ITennisAbstractEloService _eloService;
     private readonly ILogger<MatchPrefillBuilder> _logger;
 
     public MatchPrefillBuilder(
@@ -18,12 +19,14 @@ public sealed class MatchPrefillBuilder : IMatchPrefillBuilder
         ISportradarDailyMatchResolver dailyResolver,
         IMatchRawJsonBuilder matchRawJsonBuilder,
         IMatchBalanceFillBuilder balanceBuilder,
+        ITennisAbstractEloService eloService,
         ILogger<MatchPrefillBuilder> logger)
     {
         _tennisApi = tennisApi;
         _dailyResolver = dailyResolver;
         _matchRawJsonBuilder = matchRawJsonBuilder;
         _balanceBuilder = balanceBuilder;
+        _eloService = eloService;
         _logger = logger;
     }
 
@@ -90,6 +93,28 @@ public sealed class MatchPrefillBuilder : IMatchPrefillBuilder
             {
                 log?.Invoke($"  [WARN] META niedostępne: {ex.Message}");
             }
+        }
+
+        // ------- Elo (TennisAbstract WTA) -------
+        string fill_7;
+        try
+        {
+            using var eloCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            eloCts.CancelAfter(TimeSpan.FromSeconds(20));
+
+            log?.Invoke("  [AUTO] Pobieram Elo (TennisAbstract WTA)...");
+            fill_7 = await _eloService.BuildFill7Async(m.PlayerA, m.PlayerB, surface, eloCts.Token);
+            log?.Invoke("  [AUTO] Elo OK.");
+        }
+        catch (Exception ex)
+        {
+            log?.Invoke($"  [WARN] Elo niedostępne: {ex.Message}");
+            fill_7 = string.Join(Environment.NewLine,
+                "Elo_A (overall): n/a",
+                "Elo_B (overall): n/a",
+                "Elo_A (surface): n/a",
+                "Elo_B (surface): n/a",
+                "ΔElo (surface): n/a");
         }
 
         // ------- Bilans -------
@@ -184,14 +209,18 @@ public sealed class MatchPrefillBuilder : IMatchPrefillBuilder
             ["<<FILL_4>>"] = indoorOutdoor,
             ["<<FILL_5>>"] = format,
             ["<<FILL_6>>"] = fill_6,
+            ["<<FILL_7>>"] = fill_7,
+
             ["<<FILL_11_1>>"] = jsonA,
             ["<<FILL_11_2>>"] = fill11_2,
             ["<<FILL_11_3>>"] = fill11_3,
             ["<<FILL_11_4>>"] = fill11_4,
+
             ["<<FILL_12_1>>"] = jsonB,
             ["<<FILL_12_2>>"] = fill12_2,
             ["<<FILL_12_3>>"] = fill12_3,
             ["<<FILL_12_4>>"] = fill12_4,
+
             ["<<FILL_13>>"] = fill_13
         };
 
