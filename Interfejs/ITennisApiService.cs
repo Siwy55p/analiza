@@ -10,7 +10,7 @@ public interface ITennisApiService
     GetLast10MatchesForBothAsync(string competitorIdA, string competitorIdB, CancellationToken ct);
 
     Task<IReadOnlyList<PlayerMatchSummary>> GetLast10MatchesByNameAsync(string playerName, CancellationToken ct);
-    Task<IReadOnlyList<PlayerMatchSummary>> GetRecentClosedSinglesMatchesAsync(string competitorId, CancellationToken ct);
+    Task<IReadOnlyList<PlayerMatchSummary>> GetRecentClosedSinglesMatchesAsync(string competitorId, CancellationToken ct, SurfaceResolutionMode surfaceMode = SurfaceResolutionMode.CtxOrSeason, int maxMatchesToParse = 80);
 
     Task<string> BuildFill6_WorldAndRaceAsync(string playerAName, string playerBName, CancellationToken ct);
 

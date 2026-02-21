@@ -16,7 +16,7 @@ public sealed class MatchBalanceFillBuilder : IMatchBalanceFillBuilder
 
     public async Task<string> BuildByCompetitorIdAsync(string playerName, string competitorId, CancellationToken ct)
     {
-        var all = await _tennisApi.GetRecentClosedSinglesMatchesAsync(competitorId, ct);
+        var all = await _tennisApi.GetRecentClosedSinglesMatchesAsync(competitorId, ct, SurfaceResolutionMode.None);
 
         var now = DateTimeOffset.UtcNow;
         var start10w = now.AddDays(-70);
