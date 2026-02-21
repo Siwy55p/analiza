@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using STSAnaliza.Models;
+using System.ComponentModel;
 
 namespace STSAnaliza;
 
@@ -11,7 +12,11 @@ public partial class Form1
 
         try
         {
-            _listMatches = await _listScraper.ExtractMatchListAsync();
+            var list = await _listScraper.ExtractMatchListAsync();
+            _listMatches = new BindingList<MatchListItem>(list);
+
+            dataGridMatchList.DataSource = _listMatches;
+
             txtListOutput.Text = Services.StsMatchListScraper.RenderForUi(_listMatches);
             dataGridMatchList.DataSource = _listMatches;
         }
@@ -203,7 +208,7 @@ public partial class Form1
             var res = await _listPipeline.AnalyzeAsyncInteractive(
                 m,
                 waitUserMessageAsync: WaitUserMsgAsync,
-                onChat: txt => AppendLineSafe(rtbdoc, txt),
+                onChat: txt => AppendLineSafe(rtbOmijaj, txt),
                 onStep: (stepNo, stepTotal, stepTitle) =>
                 {
                     AppendLineSafe(txtListOutput, $"   krok {stepNo}/{stepTotal}: {stepTitle}");

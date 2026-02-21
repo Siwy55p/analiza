@@ -1,7 +1,8 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using STSAnaliza.Interfejs;
-using STSAnaliza.Services;
 using STSAnaliza.Models;
+using STSAnaliza.Services;
+using System.ComponentModel;
 using System.Threading.Channels;
 
 namespace STSAnaliza;
@@ -21,7 +22,7 @@ public partial class Form1 : Form
     private CancellationTokenSource? _logCts;
     private CancellationTokenSource? _listAnalyzeCts;
 
-    private List<MatchListItem> _listMatches = new();
+    private BindingList<MatchListItem> _listMatches = new();
 
     private ListTemplateForm? _listTemplateForm;
     private OptionsForm? _optionsListStepsForm;

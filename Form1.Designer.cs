@@ -195,7 +195,7 @@
             rtbOmijaj.Name = "rtbOmijaj";
             rtbOmijaj.Size = new Size(148, 410);
             rtbOmijaj.TabIndex = 0;
-            rtbOmijaj.Text = "\"debel\", \"dubel\", \"debl\", \"doubles\",";
+            rtbOmijaj.Text = "";
             // 
             // panel2
             // 

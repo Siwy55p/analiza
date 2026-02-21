@@ -1,6 +1,9 @@
-﻿namespace STSAnaliza.Models;
+﻿using System.ComponentModel;
+using System.Runtime.CompilerServices;
 
-public sealed class MatchListItem
+namespace STSAnaliza.Models;
+
+public sealed class MatchListItem : INotifyPropertyChanged
 {
     public string Tournament { get; set; } = "";
     public string PlayerA { get; set; } = "";
@@ -12,7 +15,28 @@ public sealed class MatchListItem
 
     public int SourceIndex { get; set; }
 
-    public string? Surface { get; set; } // <<FILL_3>>
-    //public string? Round { get; set; }   // <<FILL_4>>
-    public string? FormatMeczu { get; set; } // <<FILL_5>>
+    private string? _surface;
+    private string? _formatMeczu;
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public string? Surface
+    {
+        get => _surface;
+        set => SetField(ref _surface, value);
+    }
+
+    public string? FormatMeczu
+    {
+        get => _formatMeczu;
+        set => SetField(ref _formatMeczu, value);
+    }
+
+    private bool SetField<T>(ref T field, T value, [CallerMemberName] string? name = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        return true;
+    }
 }
