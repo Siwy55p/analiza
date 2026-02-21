@@ -131,7 +131,7 @@ Podsumowanie: [DO UZUPEŁNIENIA]";
 
                 services.AddTransient<OptionsForm>();
                 services.AddTransient<ListTemplateForm>();
-                services.AddSingleton<Form1>();
+                services.AddSingleton<MainForm>();
             })
             .Build();
 
@@ -139,7 +139,7 @@ Podsumowanie: [DO UZUPEŁNIENIA]";
 
         using (host)
         {
-            var form = host.Services.GetRequiredService<Form1>();
+            var form = host.Services.GetRequiredService<MainForm>();
             Application.Run(form);
         }
     }

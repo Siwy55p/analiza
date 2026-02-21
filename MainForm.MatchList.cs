@@ -4,7 +4,7 @@ using System.ComponentModel;
 
 namespace STSAnaliza;
 
-public partial class Form1
+public partial class MainForm
 {
     private async void btnDownloadList_Click(object sender, EventArgs e)
     {

@@ -1,6 +1,6 @@
 ﻿namespace STSAnaliza
 {
-    partial class Form1
+    partial class MainForm
     {
         /// <summary>
         ///  Required designer variable.
@@ -526,13 +526,13 @@
             txtOutput.TabIndex = 0;
             txtOutput.Text = "";
             // 
-            // Form1
+            // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1714, 792);
             Controls.Add(tabControl1);
-            Name = "Form1";
+            Name = "MainForm";
             Text = "Form1";
             panel1.ResumeLayout(false);
             tlpLeft.ResumeLayout(false);

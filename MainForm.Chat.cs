@@ -1,6 +1,6 @@
-namespace STSAnaliza;
+﻿namespace STSAnaliza;
 
-public partial class Form1
+public partial class MainForm
 {
     private Task<string> WaitUserMsgAsync(CancellationToken ct)
         => _userInput.Reader.ReadAsync(ct).AsTask();

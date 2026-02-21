@@ -1,6 +1,6 @@
-namespace STSAnaliza;
+﻿namespace STSAnaliza;
 
-public partial class Form1
+public partial class MainForm
 {
     private void ShowNonModal<TForm>(ref TForm? instance, Func<TForm> factory, Action onClosed)
         where TForm : Form

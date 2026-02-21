@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -24,5 +24,47 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+	<ItemGroup>
+		<!-- GŁÓWNY formularz: Designer -->
+		<Compile Update="MainForm.cs">
+			<SubType>Form</SubType>
+		</Compile>
 
+		<!-- designer zależny od MainForm.cs -->
+		<Compile Update="MainForm.Designer.cs">
+			<DependentUpon>MainForm.cs</DependentUpon>
+		</Compile>
+
+		<!-- resx zależny od MainForm.cs -->
+		<EmbeddedResource Update="MainForm.resx">
+			<DependentUpon>MainForm.cs</DependentUpon>
+		</EmbeddedResource>
+
+		<!-- odnogi: zwykły kod (bez designera po dwukliku) -->
+		<Compile Update="MainForm.Chat.cs">
+			<DependentUpon>MainForm.cs</DependentUpon>
+			<SubType>Code</SubType>
+		</Compile>
+
+		<Compile Update="MainForm.Debug.cs">
+			<DependentUpon>MainForm.cs</DependentUpon>
+			<SubType>Code</SubType>
+		</Compile>
+
+		<Compile Update="MainForm.Logs.cs">
+			<DependentUpon>MainForm.cs</DependentUpon>
+			<SubType>Code</SubType>
+		</Compile>
+
+		<Compile Update="MainForm.Helpers.cs">
+			<DependentUpon>MainForm.cs</DependentUpon>
+			<SubType>Code</SubType>
+		</Compile>
+
+		<Compile Update="MainForm.MatchList.cs">
+			<DependentUpon>MainForm.cs</DependentUpon>
+			<SubType>Code</SubType>
+		</Compile>
+	</ItemGroup>
+	
 </Project>

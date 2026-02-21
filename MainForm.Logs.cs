@@ -1,6 +1,6 @@
-namespace STSAnaliza;
+﻿namespace STSAnaliza;
 
-public partial class Form1
+public partial class MainForm
 {
     private async void btnPobierzLog_Click(object sender, EventArgs e)
     {

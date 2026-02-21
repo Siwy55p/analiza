@@ -7,7 +7,7 @@ using System.Threading.Channels;
 
 namespace STSAnaliza;
 
-public partial class Form1 : Form
+public partial class MainForm : Form
 {
     private readonly ITennisApiService _tennisApi;
     private readonly IOpenAiService _openAiService;
@@ -36,7 +36,7 @@ public partial class Form1 : Form
             AllowSynchronousContinuations = false
         });
 
-    public Form1()
+    public MainForm()
     {
         InitializeComponent();
 
@@ -52,7 +52,7 @@ public partial class Form1 : Form
     }
 
     [ActivatorUtilitiesConstructor]
-    public Form1(
+    public MainForm(
         ITennisApiService tennisApi,
         IMatchPrefillBuilder prefillBuilder,
         IMatchListPipelineStepStore listStepStore,
