@@ -10,14 +10,12 @@ namespace STSAnaliza;
 public partial class MainForm : Form
 {
     private readonly ITennisApiService _tennisApi;
-    private readonly IOpenAiService _openAiService;
-    private readonly IMatchPrefillBuilder _prefillBuilder;
     private readonly IServiceProvider _sp;
     private readonly IOpenAiLogService _logService;
+
     private readonly IMatchListPipelineStepStore _listStepStore;
-    private readonly MatchListPipeline _listPipeline;
     private readonly StsMatchListScraper _listScraper;
-    private readonly ISportradarRequestMeter? _srMeter;
+    private readonly IMatchListAnalyzer _matchListAnalyzer;
 
     private CancellationTokenSource? _logCts;
     private CancellationTokenSource? _listAnalyzeCts;
@@ -40,40 +38,49 @@ public partial class MainForm : Form
     {
         InitializeComponent();
 
+        // konstruktor dla designera WinForms
         _tennisApi = null!;
-        _openAiService = null!;
-        _prefillBuilder = null!;
         _sp = null!;
         _logService = null!;
+
         _listStepStore = null!;
-        _listPipeline = null!;
         _listScraper = null!;
-        _srMeter = null;
+        _matchListAnalyzer = null!;
     }
 
     [ActivatorUtilitiesConstructor]
     public MainForm(
         ITennisApiService tennisApi,
-        IMatchPrefillBuilder prefillBuilder,
         IMatchListPipelineStepStore listStepStore,
-        IServiceProvider sp,
         StsMatchListScraper listScraper,
-        MatchListPipeline listPipeline,
+        IMatchListAnalyzer matchListAnalyzer,
         IOpenAiLogService logService,
-        IOpenAiService openAiService,
-        ISportradarRequestMeter srMeter
+        IServiceProvider sp
     ) : this()
     {
-        _listScraper = listScraper;
-        _listStepStore = listStepStore;
-        _sp = sp;
-        _listPipeline = listPipeline;
-        _logService = logService;
-
         _tennisApi = tennisApi;
-        _prefillBuilder = prefillBuilder;
+        _listStepStore = listStepStore;
+        _listScraper = listScraper;
+        _matchListAnalyzer = matchListAnalyzer;
+        _logService = logService;
+        _sp = sp;
+    }
 
-        _openAiService = openAiService;
-        _srMeter = srMeter;
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        // przerwij ewentualne trwające operacje
+        try { _logCts?.Cancel(); } catch { }
+        try { _listAnalyzeCts?.Cancel(); } catch { }
+
+        _logCts?.Dispose();
+        _logCts = null;
+
+        _listAnalyzeCts?.Dispose();
+        _listAnalyzeCts = null;
+
+        // zamknij kanał wejścia użytkownika (jeśli ktoś czeka na ReadAsync)
+        try { _userInput.Writer.TryComplete(); } catch { }
+
+        base.OnFormClosing(e);
     }
 }

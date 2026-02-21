@@ -16,7 +16,7 @@ namespace STSAnaliza;
 internal static class Program
 {
     [STAThread]
-    static void Main()
+    static async Task Main()
     {
         var appDataDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -133,14 +133,24 @@ Podsumowanie: [DO UZUPEŁNIENIA]";
                 services.AddTransient<ListTemplateForm>();
                 services.AddSingleton<MainForm>();
             })
-            .Build();
+           .Build();
 
         ApplicationConfiguration.Initialize();
 
-        using (host)
+        try
         {
             var form = host.Services.GetRequiredService<MainForm>();
             Application.Run(form);
+        }
+        finally
+        {
+            // ważne: Host i serwisy (np. Playwright) mogą mieć IAsyncDisposable
+            try { await host.StopAsync(); } catch { /* ignore */ }
+
+            if (host is IAsyncDisposable asyncHost)
+                await asyncHost.DisposeAsync();
+            else
+                host.Dispose();
         }
     }
 }

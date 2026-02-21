@@ -35,7 +35,7 @@
             btnCancelAnalyze = new Button();
             button3 = new Button();
             button4 = new Button();
-            grpOmijaj = new GroupBox();
+            logKroki = new GroupBox();
             rtbOmijaj = new RichTextBox();
             panel2 = new Panel();
             txtListOutput = new RichTextBox();
@@ -67,7 +67,7 @@
             txtOutput = new RichTextBox();
             panel1.SuspendLayout();
             tlpLeft.SuspendLayout();
-            grpOmijaj.SuspendLayout();
+            logKroki.SuspendLayout();
             panel2.SuspendLayout();
             panel3.SuspendLayout();
             tableLayoutPanel1.SuspendLayout();
@@ -106,7 +106,7 @@
             tlpLeft.Controls.Add(btnCancelAnalyze, 0, 2);
             tlpLeft.Controls.Add(button3, 0, 3);
             tlpLeft.Controls.Add(button4, 0, 4);
-            tlpLeft.Controls.Add(grpOmijaj, 0, 5);
+            tlpLeft.Controls.Add(logKroki, 0, 5);
             tlpLeft.Dock = DockStyle.Fill;
             tlpLeft.Location = new Point(10, 10);
             tlpLeft.Name = "tlpLeft";
@@ -175,17 +175,17 @@
             button4.Text = "Szablon";
             button4.Click += button4_Click;
             // 
-            // grpOmijaj
+            // logKroki
             // 
-            grpOmijaj.Controls.Add(rtbOmijaj);
-            grpOmijaj.Dock = DockStyle.Fill;
-            grpOmijaj.Location = new Point(3, 283);
-            grpOmijaj.Name = "grpOmijaj";
-            grpOmijaj.Padding = new Padding(8);
-            grpOmijaj.Size = new Size(164, 442);
-            grpOmijaj.TabIndex = 5;
-            grpOmijaj.TabStop = false;
-            grpOmijaj.Text = "Omijaj (frazy)";
+            logKroki.Controls.Add(rtbOmijaj);
+            logKroki.Dock = DockStyle.Fill;
+            logKroki.Location = new Point(3, 283);
+            logKroki.Name = "logKroki";
+            logKroki.Padding = new Padding(8);
+            logKroki.Size = new Size(164, 442);
+            logKroki.TabIndex = 5;
+            logKroki.TabStop = false;
+            logKroki.Text = "Kroki";
             // 
             // rtbOmijaj
             // 
@@ -537,7 +537,7 @@
             Text = "STSAnaliza";
             panel1.ResumeLayout(false);
             tlpLeft.ResumeLayout(false);
-            grpOmijaj.ResumeLayout(false);
+            logKroki.ResumeLayout(false);
             panel2.ResumeLayout(false);
             panel3.ResumeLayout(false);
             tableLayoutPanel1.ResumeLayout(false);
@@ -564,7 +564,7 @@
 
         #endregion
         private TableLayoutPanel tlpLeft;
-        private GroupBox grpOmijaj;
+        private GroupBox logKroki;
 
         private TableLayoutPanel tlpTab2;
         private Panel pnlTab2Top;

@@ -18,7 +18,6 @@ public partial class MainForm
             dataGridMatchList.DataSource = _listMatches;
 
             txtListOutput.Text = Services.StsMatchListScraper.RenderForUi(_listMatches);
-            dataGridMatchList.DataSource = _listMatches;
         }
         catch (Exception ex)
         {
@@ -45,7 +44,9 @@ public partial class MainForm
             ref _optionsListStepsForm,
             () =>
             {
-                var f = new OptionsForm(_listStepStore);
+                // IPipelineStepStore jest u Ciebie wielokrotnie rejestrowany (match + lista),
+                // więc tutaj świadomie wymuszamy store listowy.
+                var f = ActivatorUtilities.CreateInstance<OptionsForm>(_sp, _listStepStore);
                 f.Text = "Opcje – analiza listy meczów (Tab2)";
                 return f;
             },
@@ -54,14 +55,7 @@ public partial class MainForm
 
     private async void tnListAnalyze_Click(object sender, EventArgs e)
     {
-        if (_openAiService is null)
-        {
-            MessageBox.Show("OpenAI service nie jest zainicjalizowany.", "Błąd",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return;
-        }
-
-        if (_listMatches == null || _listMatches.Count == 0)
+        if (_listMatches.Count == 0)
         {
             MessageBox.Show("Najpierw pobierz listę meczów.", "Info",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -84,11 +78,10 @@ public partial class MainForm
             for (int i = 0; i < _listMatches.Count; i++)
             {
                 ct.ThrowIfCancellationRequested();
-                var m = _listMatches[i];
 
+                var m = _listMatches[i];
                 await AnalyzeMatchListItemAsync(m, i + 1, _listMatches.Count, ct);
 
-                // mała pauza zmniejsza ryzyko rate-limitów / zrywania połączeń
                 await Task.Delay(250, ct);
             }
 
@@ -115,13 +108,11 @@ public partial class MainForm
     {
         if (rowIndex < 0) return null;
 
-        // Najbezpieczniej: DataBoundItem (działa też przy sortowaniu w gridzie)
         var row = dataGridMatchList.Rows[rowIndex];
         if (row?.DataBoundItem is MatchListItem mi)
             return mi;
 
-        // Fallback
-        if (_listMatches != null && rowIndex < _listMatches.Count)
+        if (rowIndex < _listMatches.Count)
             return _listMatches[rowIndex];
 
         return null;
@@ -131,14 +122,7 @@ public partial class MainForm
     {
         if (e.RowIndex < 0) return;
 
-        if (_openAiService is null)
-        {
-            MessageBox.Show("OpenAI service nie jest zainicjalizowany.", "Błąd",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return;
-        }
-
-        if (_listMatches == null || _listMatches.Count == 0)
+        if (_listMatches.Count == 0)
         {
             MessageBox.Show("Najpierw pobierz listę meczów.", "Info",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -187,53 +171,22 @@ public partial class MainForm
     {
         ct.ThrowIfCancellationRequested();
 
-        var srStart = _srMeter?.Snapshot();
-
         AppendLineSafe(txtListOutput, "");
         AppendLineSafe(txtListOutput, $"[{index1Based}/{total}] {m.Tournament}");
         AppendLineSafe(txtListOutput, $"  {m.PlayerA} vs {m.PlayerB} | {m.Day} {m.Hour}");
 
-        using var perMatchCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        perMatchCts.CancelAfter(TimeSpan.FromMinutes(60));
-        var perCt = perMatchCts.Token;
-
-        try
-        {
-            // logika "AUTO" (Sportradar + wyliczenia) jest w osobnym serwisie
-            var prefill = await _prefillBuilder.BuildAsync(
-                m,
-                perCt,
-                log: msg => AppendLineSafe(txtListOutput, msg));
-
-            var res = await _listPipeline.AnalyzeAsyncInteractive(
-                m,
-                waitUserMessageAsync: WaitUserMsgAsync,
-                onChat: txt => AppendLineSafe(rtbOmijaj, txt),
-                onStep: (stepNo, stepTotal, stepTitle) =>
-                {
-                    AppendLineSafe(txtListOutput, $"   krok {stepNo}/{stepTotal}: {stepTitle}");
-                },
-                prefilled: prefill.Prefilled,
-                ct: perCt);
-
-            AppendLineSafe(rtbdoc, res);
-        }
-        catch (OperationCanceledException)
-        {
-            AppendLineSafe(txtListOutput, "  [PRZERWANO] Timeout lub anulowano.");
-        }
-        catch (Exception ex)
-        {
-            AppendLineSafe(txtListOutput, $"  [BŁĄD] {ex.Message}");
-        }
-        finally
-        {
-            // ---- Sportradar: ile requestów poszło na ten mecz? ----
-            if (_srMeter is not null && srStart is not null)
+        var res = await _matchListAnalyzer.AnalyzeOneAsync(
+            match: m,
+            waitUserMessageAsync: WaitUserMsgAsync,
+            onChat: txt => AppendLineSafe(rtbOmijaj, txt), // <-- GPT/AUTO logi tutaj
+            onStep: (stepNo, stepTotal, stepTitle) =>
             {
-                var delta = _srMeter.DeltaSince(srStart, topN: 5);
-                AppendLineSafe(txtListOutput, $"  [SR] {delta.ToLogLine()}");
-            }
-        }
+                AppendLineSafe(txtListOutput, $"   krok {stepNo}/{stepTotal}: {stepTitle}");
+            },
+            log: msg => AppendLineSafe(txtListOutput, msg),
+            ct: ct);
+
+        if (!string.IsNullOrWhiteSpace(res))
+            AppendLineSafe(rtbdoc, res);
     }
 }

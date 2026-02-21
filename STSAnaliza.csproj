@@ -26,9 +26,7 @@
   </ItemGroup>
 	<ItemGroup>
 		<!-- GŁÓWNY formularz: Designer -->
-		<Compile Update="MainForm.cs">
-			<SubType>Form</SubType>
-		</Compile>
+		<Compile Update="MainForm.cs" />
 
 		<!-- designer zależny od MainForm.cs -->
 		<Compile Update="MainForm.Designer.cs">
@@ -43,27 +41,22 @@
 		<!-- odnogi: zwykły kod (bez designera po dwukliku) -->
 		<Compile Update="MainForm.Chat.cs">
 			<DependentUpon>MainForm.cs</DependentUpon>
-			<SubType>Code</SubType>
 		</Compile>
 
 		<Compile Update="MainForm.Debug.cs">
 			<DependentUpon>MainForm.cs</DependentUpon>
-			<SubType>Code</SubType>
 		</Compile>
 
 		<Compile Update="MainForm.Logs.cs">
 			<DependentUpon>MainForm.cs</DependentUpon>
-			<SubType>Code</SubType>
 		</Compile>
 
 		<Compile Update="MainForm.Helpers.cs">
 			<DependentUpon>MainForm.cs</DependentUpon>
-			<SubType>Code</SubType>
 		</Compile>
 
 		<Compile Update="MainForm.MatchList.cs">
 			<DependentUpon>MainForm.cs</DependentUpon>
-			<SubType>Code</SubType>
 		</Compile>
 	</ItemGroup>
 	
