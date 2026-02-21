@@ -277,15 +277,15 @@
             textBoxAnswer.Location = new Point(0, 0);
             textBoxAnswer.Margin = new Padding(0, 8, 8, 8);
             textBoxAnswer.Name = "textBoxAnswer";
-            textBoxAnswer.Size = new Size(1034, 23);
+            textBoxAnswer.Size = new Size(934, 23);
             textBoxAnswer.TabIndex = 0;
             // 
             // btnWyslij
             // 
             btnWyslij.Dock = DockStyle.Right;
-            btnWyslij.Location = new Point(1034, 0);
+            btnWyslij.Location = new Point(934, 0);
             btnWyslij.Name = "btnWyslij";
-            btnWyslij.Size = new Size(170, 38);
+            btnWyslij.Size = new Size(270, 38);
             btnWyslij.TabIndex = 1;
             btnWyslij.Text = "Wyślij odpowiedź";
             btnWyslij.Click += btnWyslij_Click;
@@ -530,10 +530,11 @@
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
+            AutoSize = true;
             ClientSize = new Size(1714, 792);
             Controls.Add(tabControl1);
             Name = "MainForm";
-            Text = "Form1";
+            Text = "STSAnaliza";
             panel1.ResumeLayout(false);
             tlpLeft.ResumeLayout(false);
             grpOmijaj.ResumeLayout(false);
