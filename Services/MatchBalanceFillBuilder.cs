@@ -27,16 +27,16 @@ public sealed class MatchBalanceFillBuilder : IMatchBalanceFillBuilder
         var m12 = valid.Where(m => m.StartTimeUtc >= start12m).ToList();
         var m10 = valid.Where(m => m.StartTimeUtc >= start10w).ToList();
 
-        string wl12m = m12.Count > 0 ? $"{CountWL(m12).W}-{CountWL(m12).L}" : "brak danych";
-        string wl10w = m10.Count > 0 ? $"{CountWL(m10).W}-{CountWL(m10).L}" : "brak danych";
+        string wl12m = m12.Count > 0 ? $"{CountWL(m12).W}-{CountWL(m12).L}" : "0-0";
+        string wl10w = m10.Count > 0 ? $"{CountWL(m10).W}-{CountWL(m10).L}" : "0-0";
 
         var aor12 = await AvgOppRankAsync(m12, ct);
         var aor10 = await AvgOppRankAsync(m10, ct);
 
         string quality =
-            (m12.Count == 0 && m10.Count == 0)
-                ? "brak danych"
-                : $"{QualityPart(m12, aor12, "12M")} {QualityPart(m10, aor10, "10W")}".Trim();
+    (m12.Count == 0 && m10.Count == 0)
+        ? "brak meczów w okresie (12M i 10W)."
+        : $"{QualityPart(m12, aor12, "12M")} {QualityPart(m10, aor10, "10W")}".Trim();
 
         return Format(wl12m, wl10w, quality);
     }
@@ -54,7 +54,7 @@ public sealed class MatchBalanceFillBuilder : IMatchBalanceFillBuilder
 
     private static string QualityPart(List<PlayerMatchSummary> list, int? aor, string label)
     {
-        if (list.Count == 0) return $"{label}: brak danych.";
+        if (list.Count == 0) return $"{label}: brak meczów.";
 
         var (w, l) = CountWL(list);
         var total = w + l;
