@@ -112,7 +112,7 @@ Podsumowanie: [DO UZUPEŁNIENIA]";
                 services.AddSingleton<IMatchRawJsonBuilder, MatchRawJsonBuilder>();
 
                 // --- NOWE: TennisAbstract Elo (WTA) ---
-                services.AddHttpClient<ITennisAbstractEloService, TennisAbstractEloService>(client =>
+                services.AddHttpClient<IWtaEloService, WtaEloService>(client =>
                 {
                     client.BaseAddress = new Uri("https://tennisabstract.com/");
                     client.Timeout = TimeSpan.FromSeconds(30);

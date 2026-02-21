@@ -278,8 +278,8 @@ namespace STSAnaliza.Services
             string[] banned =
             {
                 "debel", "dubel", "debl", "doubles",
-                "itf", "utr",
-                "kwal", "kwalifikacje", "kwalifikacja", "qualification", "qualifying"
+                "itf", "utr"
+                //"kwal", "kwalifikacje", "kwalifikacja", "qualification", "qualifying"
             };
 
             return banned.Any(t.Contains);
